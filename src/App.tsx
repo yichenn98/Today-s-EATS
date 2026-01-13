@@ -8,7 +8,8 @@ import WheelPage from './components/WheelPage';
 import LoginPage from './components/LoginPage';
 import AddRecordModal from './components/AddRecordModal';
 import EditRecordModal from './components/EditRecordModal';
-import { MORANDI_PRIMARY } from './constants';
+import { MORANDI_PRIMARY } from './constants.ts';
+
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
