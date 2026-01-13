@@ -5,6 +5,7 @@ import { User, MealRecord, ViewType, Category } from './types';
 import RecordsPage from './components/RecordsPage';
 import StatsPage from './components/StatsPage';
 import WheelPage from './components/WheelPage';
+import LoginPage from './components/LoginPage';
 import AddRecordModal from './components/AddRecordModal';
 import EditRecordModal from './components/EditRecordModal';
 import { MORANDI_PRIMARY } from './constants';
