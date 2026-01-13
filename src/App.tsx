@@ -11,7 +11,6 @@ import EditRecordModal from './components/EditRecordModal';
 import { MORANDI_PRIMARY } from './constants';
 
 
-
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(() => {
     try {
