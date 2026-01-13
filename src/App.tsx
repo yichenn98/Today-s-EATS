@@ -2,7 +2,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, LayoutGrid, BarChart3, Target, LogOut } from 'lucide-react';
 import { User, MealRecord, ViewType, Category } from './types';
-import LoginPage from './components/LoginPage';
 import RecordsPage from './components/RecordsPage';
 import StatsPage from './components/StatsPage';
 import WheelPage from './components/WheelPage';
