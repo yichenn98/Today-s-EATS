@@ -13,9 +13,9 @@ export interface MealRecord {
 
 export interface User {
   name: string;
-  email: string;
   avatar: string;
-  provider: 'google' | 'line';
+  email?: string;
+  provider?: 'google' | 'line';
 }
 
 export type ViewType = 'records' | 'stats' | 'wheel';
