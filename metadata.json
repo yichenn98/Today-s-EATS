@@ -1,0 +1,7 @@
+{
+  "name": "Today's Eats (今天吃什麼)",
+  "description": "A minimalist food diary and decision tool featuring a calendar view, spending statistics, and a fun meal-picking wheel. Perfect for organizing your daily meals and overcoming choice paralysis.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
