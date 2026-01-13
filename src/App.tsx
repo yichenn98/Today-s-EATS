@@ -8,7 +8,8 @@ import WheelPage from './components/WheelPage';
 import LoginPage from './components/LoginPage';
 import AddRecordModal from './components/AddRecordModal';
 import EditRecordModal from './components/EditRecordModal';
-import { MORANDI_PRIMARY } from './constants.ts';
+import { MORANDI_PRIMARY } from './constants';
+
 
 
 const App: React.FC = () => {
