@@ -68,33 +68,59 @@ const App: React.FC = () => {
   };
 
   const addRecord = async (newRecord: Omit<MealRecord, "id">) => {
-    if (!uid) return;
+  if (!uid) {
+    alert("登入狀態尚未完成，請稍等 1 秒或重新整理後再試一次。");
+    return;
+  }
 
-    const recordWithId: MealRecord = {
-      ...newRecord,
-      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
-    };
+  const recordWithId: MealRecord = {
+    ...newRecord,
+    id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+  };
 
+  try {
     await upsertRecord(uid, recordWithId);
     setIsAddModalOpen(false);
     setPreselectedCategory(undefined);
-  };
+  } catch (e) {
+    console.error("addRecord failed:", e);
+    alert("新增失敗：可能是 Firestore 權限/規則尚未設定完成，請看 Console 錯誤訊息。");
+  }
+};
 
-  const updateRecord = async (id: string, updatedFields: Partial<MealRecord>) => {
-    if (!uid) return;
-    const current = records.find(r => r.id === id);
-    if (!current) return;
+const updateRecord = async (id: string, updatedFields: Partial<MealRecord>) => {
+  if (!uid) {
+    alert("登入狀態尚未完成，請稍等 1 秒或重新整理後再試一次。");
+    return;
+  }
 
+  const current = records.find((r) => r.id === id);
+  if (!current) return;
+
+  try {
     await upsertRecord(uid, { ...current, ...updatedFields });
     setEditingRecord(null);
-  };
+  } catch (e) {
+    console.error("updateRecord failed:", e);
+    alert("更新失敗：可能是 Firestore 權限/規則問題，請看 Console。");
+  }
+};
 
-  const deleteRecord = async (id: string) => {
-    if (!uid) return;
+const deleteRecord = async (id: string) => {
+  if (!uid) {
+    alert("登入狀態尚未完成，請稍等 1 秒或重新整理後再試一次。");
+    return;
+  }
 
+  try {
     await removeRecord(uid, id);
     setEditingRecord(null);
-  };
+  } catch (e) {
+    console.error("deleteRecord failed:", e);
+    alert("刪除失敗：可能是 Firestore 權限/規則問題，請看 Console。");
+  }
+};
+
 
 
   const handleOpenAddModal = (cat?: Category) => {
