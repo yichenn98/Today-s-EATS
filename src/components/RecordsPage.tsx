@@ -11,6 +11,12 @@ interface RecordsPageProps {
   onAddAtCategory: (cat: Category) => void;
 }
 
+const getCreatedAtFromId = (id: string) => {
+  // 你的 id 形如：`${Date.now()}-${random}`
+  const n = Number(id.split('-')[0]);
+  return Number.isFinite(n) ? n : 0;
+};
+
 const RecordsPage: React.FC<RecordsPageProps> = ({
   records,
   selectedDate,
@@ -22,25 +28,43 @@ const RecordsPage: React.FC<RecordsPageProps> = ({
     return records.filter((r) => r.date === selectedDate);
   }, [records, selectedDate]);
 
-  const getMealForCategory = (cat: Category) => dailyRecords.find((r) => r.category === cat);
+  // ✅ 下方清單：先依類別排序，再依時間排序（同類別多筆）
+  // 這裡用「時間由舊到新」；若你想「最新在最上面」，把 aTime - bTime 改成 bTime - aTime
+  const orderedDailyRecords = useMemo(() => {
+    return [...dailyRecords].sort((a, b) => {
+      const aCat = CATEGORIES.indexOf(a.category);
+      const bCat = CATEGORIES.indexOf(b.category);
+      if (aCat !== bCat) return aCat - bCat;
+
+      const aTime = getCreatedAtFromId(a.id);
+      const bTime = getCreatedAtFromId(b.id);
+      return aTime - bTime; // 同類別：舊→新
+    });
+  }, [dailyRecords]);
+
+  // ✅ 上方四格：同類別多筆時，取「最新一筆」來顯示/點擊
+  const getLatestMealForCategory = (cat: Category) => {
+    const list = dailyRecords.filter((r) => r.category === cat);
+    if (list.length === 0) return undefined;
+    return list.reduce((latest, cur) => {
+      return getCreatedAtFromId(cur.id) > getCreatedAtFromId(latest.id) ? cur : latest;
+    });
+  };
 
   const handleBlockClick = (cat: Category) => {
-    const meal = getMealForCategory(cat);
-    if (meal) onEditRecord(meal);
+    const latest = getLatestMealForCategory(cat);
+    if (latest) onEditRecord(latest);
     else onAddAtCategory(cat);
   };
 
-  // ✅ 今天（給 Calendar 用）
-  const today = new Date().toISOString().split('T')[0];
-
   return (
     <div className="animate-in fade-in duration-500">
-      {/* 先維持你原本 Calendar 介面 */}
       <Calendar selectedDate={selectedDate} onDateChange={setSelectedDate} />
 
+      {/* 四格 */}
       <div className="p-4 grid grid-cols-2 gap-4">
         {CATEGORIES.map((cat) => {
-          const meal = getMealForCategory(cat);
+          const meal = getLatestMealForCategory(cat);
           const color = CATEGORY_COLORS[cat];
 
           return (
@@ -65,14 +89,22 @@ const RecordsPage: React.FC<RecordsPageProps> = ({
                       className="absolute inset-0 w-full h-full flex items-center justify-center"
                       style={{ backgroundColor: color }}
                     >
-                      <div className="text-white opacity-20 scale-[5]">{CATEGORY_ICONS[cat]}</div>
+                      <div className="text-white opacity-20 scale-[5]">
+                        {CATEGORY_ICONS[cat]}
+                      </div>
                     </div>
                   )}
 
                   <div className="absolute inset-0 flex flex-col justify-end p-5 z-10">
-                    <p className="text-white font-bold text-sm truncate drop-shadow-md">{meal.mealName}</p>
-                    <p className="text-white/80 text-[10px] truncate drop-shadow-sm">{meal.shopName}</p>
-                    <p className="text-white font-black text-sm mt-1 drop-shadow-md">${meal.price}</p>
+                    <p className="text-white font-bold text-sm truncate drop-shadow-md">
+                      {meal.mealName}
+                    </p>
+                    <p className="text-white/80 text-[10px] truncate drop-shadow-sm">
+                      {meal.shopName}
+                    </p>
+                    <p className="text-white font-black text-sm mt-1 drop-shadow-md">
+                      ${meal.price}
+                    </p>
                   </div>
                 </div>
               ) : (
@@ -91,17 +123,22 @@ const RecordsPage: React.FC<RecordsPageProps> = ({
 
               <div
                 className={`absolute top-4 left-4 px-2.5 py-1 rounded-xl shadow-sm border flex items-center gap-1.5 z-20 ${
-                  meal ? 'bg-white/20 backdrop-blur-md border-white/10' : 'bg-white/90 border-[#E5DCD3]/30'
+                  meal
+                    ? 'bg-white/20 backdrop-blur-md border-white/10'
+                    : 'bg-white/90 border-[#E5DCD3]/30'
                 }`}
               >
                 <div className="w-2 h-2 rounded-full" style={{ backgroundColor: color }}></div>
-                <span className={`text-[9px] font-black ${meal ? 'text-white' : 'text-[#5D6D7E]'}`}>{cat}</span>
+                <span className={`text-[9px] font-black ${meal ? 'text-white' : 'text-[#5D6D7E]'}`}>
+                  {cat}
+                </span>
               </div>
             </button>
           );
         })}
       </div>
 
+      {/* 底部詳細列表 */}
       <div className="px-6 py-4 mt-2">
         <div className="flex justify-between items-end mb-6">
           <div>
@@ -119,7 +156,7 @@ const RecordsPage: React.FC<RecordsPageProps> = ({
           </div>
         ) : (
           <div className="space-y-4">
-            {dailyRecords.map((r) => (
+            {orderedDailyRecords.map((r) => (
               <button
                 key={r.id}
                 onClick={() => onEditRecord(r)}
@@ -127,14 +164,19 @@ const RecordsPage: React.FC<RecordsPageProps> = ({
               >
                 <div
                   className="w-12 h-12 rounded-2xl flex items-center justify-center shadow-inner"
-                  style={{ backgroundColor: `${CATEGORY_COLORS[r.category]}20`, color: CATEGORY_COLORS[r.category] }}
+                  style={{
+                    backgroundColor: `${CATEGORY_COLORS[r.category]}20`,
+                    color: CATEGORY_COLORS[r.category],
+                  }}
                 >
                   {CATEGORY_ICONS[r.category]}
                 </div>
+
                 <div className="flex-1 min-w-0">
                   <h4 className="font-bold text-sm text-[#5D6D7E] truncate">{r.mealName}</h4>
                   <p className="text-[10px] text-gray-400 truncate tracking-wide">{r.shopName}</p>
                 </div>
+
                 <div className="text-right">
                   <p className="font-black text-sm text-[#5D6D7E]">${r.price}</p>
                 </div>
