@@ -31,9 +31,13 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
   // ✅ 沒開就不渲染（避免蓋住頁面/吃點擊）
   if (!isOpen) return null;
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
+  const [imageFile, setImageFile] = useState<File | null>(null);
+
+const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (file) setImageFile(file);
+};
+
 
     const reader = new FileReader();
     reader.onloadend = () => setImage(reader.result as string);
