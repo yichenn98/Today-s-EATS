@@ -115,10 +115,11 @@ const deleteRecord = async (id: string) => {
   try {
     await removeRecord(uid, id);
     setEditingRecord(null);
-  } catch (e) {
-    console.error("deleteRecord failed:", e);
-    alert("刪除失敗：可能是 Firestore 權限/規則問題，請看 Console。");
-  }
+  } catch (e: any) {
+  console.error("addRecord failed:", e);
+  alert(`新增失敗：${e?.code ?? ""} ${e?.message ?? e}`);
+}
+
 };
 
 
