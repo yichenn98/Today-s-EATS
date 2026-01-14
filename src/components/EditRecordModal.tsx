@@ -53,9 +53,17 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, onClose, onUp
             >
               <Trash2 size={20} className="text-red-300 group-hover:text-red-500" />
             </button>
-            <button onClick={onClose} className="p-3 bg-white hover:bg-gray-50 rounded-full transition-colors border border-[#E5DCD3]/50">
-              <X size={20} className="text-gray-400" />
-            </button>
+            <button 
+  onClick={async () => {
+    if (!confirm('確定要刪除這筆紀錄嗎？')) return;
+    await Promise.resolve(onDelete(record.id));
+    onClose(); // ✅ 刪除後自動關掉檢視頁
+  }} 
+  className="p-3 bg-white hover:bg-red-50 rounded-full transition-colors border border-red-100 group"
+>
+  <Trash2 size={20} className="text-red-300 group-hover:text-red-500" />
+</button>
+
           </div>
         </div>
 
