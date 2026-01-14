@@ -30,11 +30,17 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         avatar: fu.photoURL ?? '',
         provider: 'google',
       });
-    } catch (e) {
-      // popup 被擋時（GitHub Pages/瀏覽器限制）自動改用 redirect
-      console.warn('Google popup login failed, fallback to redirect:', e);
-      await signInWithRedirect(auth, provider);
-    } finally {
+    } catch (e: any) {
+  console.warn('Google popup login failed:', e);
+
+  // popup 被擋（最常見）
+  if (e?.code === 'auth/popup-blocked' || e?.code === 'auth/cancelled-popup-request') {
+    alert('登入視窗被瀏覽器擋下了：請允許彈出式視窗（Popup）後再試一次。');
+  } else {
+    alert(`登入失敗：${e?.code ?? ''} ${e?.message ?? e}`);
+  }
+}
+ finally {
       setIsLoading(false);
     }
   };
