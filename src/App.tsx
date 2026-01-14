@@ -121,10 +121,11 @@ const App: React.FC = () => {
     try {
       await removeRecord(uid, id);
       setEditingRecord(null);
-    } catch (e: any) {
-      console.error('deleteRecord failed:', e);
-      alert(`刪除失敗：${e?.code ?? ''} ${e?.message ?? e}`);
-    }
+   } catch (e: any) {
+  console.error("deleteRecord failed:", e);
+  alert(`刪除失敗：${e?.code ?? ""} ${e?.message ?? e}`);
+}
+
   };
 
   const handleOpenAddModal = (cat?: Category) => {
