@@ -9,27 +9,45 @@ import LoginPage from './components/LoginPage';
 import AddRecordModal from './components/AddRecordModal';
 import EditRecordModal from './components/EditRecordModal';
 import { MORANDI_PRIMARY } from './constants';
+import { onAuthStateChanged, signOut } from "firebase/auth";
+import { auth } from "./firebase";
+import { subscribeRecords, upsertRecord, removeRecord } from "./cloud";
 
 
 const App: React.FC = () => {
-  const [user, setUser] = useState<User | null>(() => {
-    try {
-      const saved = localStorage.getItem('eats_user');
-      return saved ? JSON.parse(saved) : null;
-    } catch (e) {
-      return null;
-    }
-  });
+  const [user, setUser] = useState<User | null>(null);
+  const [records, setRecords] = useState<MealRecord[]>([]);
+  const [uid, setUid] = useState<string | null>(null);
 
-  const [records, setRecords] = useState<MealRecord[]>(() => {
-    try {
-      const saved = localStorage.getItem('eats_records');
-      return saved ? JSON.parse(saved) : [];
-    } catch (e) {
-      console.error("Failed to load records:", e);
-      return [];
-    }
-  });
+  // Firebase Auth：監聽登入狀態（換裝置/清快取都能恢復）
+  useEffect(() => {
+    const unsub = onAuthStateChanged(auth, (fu) => {
+      if (!fu) {
+        setUid(null);
+        setUser(null);
+        setRecords([]);
+        return;
+      }
+
+      setUid(fu.uid);
+      setUser({
+        name: fu.displayName ?? "User",
+        email: fu.email ?? "",
+        avatar: fu.photoURL ?? "",
+        provider: "google",
+      });
+    });
+
+    return () => unsub();
+  }, []);
+
+  // Firestore：登入後即時同步 records
+  useEffect(() => {
+    if (!uid) return;
+    const unsub = subscribeRecords(uid, setRecords);
+    return () => unsub();
+  }, [uid]);
+
 
   const [activeTab, setActiveTab] = useState<ViewType>('records');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
@@ -37,45 +55,47 @@ const App: React.FC = () => {
   const [editingRecord, setEditingRecord] = useState<MealRecord | null>(null);
   const [preselectedCategory, setPreselectedCategory] = useState<Category | undefined>(undefined);
 
-  useEffect(() => {
-  try {
-    localStorage.setItem('eats_records', JSON.stringify(records));
-  } catch (e) {
-    console.warn("localStorage write failed:", e);
-    // 不顯示任何提示，靜默失敗
-  }
-}, [records]);
 
 
-  const handleLogin = (u: User) => {
-    setUser(u);
-    localStorage.setItem('eats_user', JSON.stringify(u));
+    // LoginPage 會 onLogin，但我們用 Firebase 真正狀態為準，這裡只做「保持相容」
+  const handleLogin = (_u: User) => {
+    // 不需要 localStorage，也不用在這裡 setUser
+    // Firebase onAuthStateChanged 會自動更新 user
   };
 
-  const handleLogout = () => {
-    setUser(null);
-    localStorage.removeItem('eats_user');
+  const handleLogout = async () => {
+    await signOut(auth);
   };
 
-  const addRecord = (newRecord: Omit<MealRecord, 'id'>) => {
+  const addRecord = async (newRecord: Omit<MealRecord, "id">) => {
+    if (!uid) return;
+
     const recordWithId: MealRecord = {
       ...newRecord,
       id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`
     };
-    setRecords(prev => [...prev, recordWithId]);
+
+    await upsertRecord(uid, recordWithId);
     setIsAddModalOpen(false);
     setPreselectedCategory(undefined);
   };
 
-  const updateRecord = (id: string, updatedFields: Partial<MealRecord>) => {
-    setRecords(prev => prev.map(r => r.id === id ? { ...r, ...updatedFields } : r));
+  const updateRecord = async (id: string, updatedFields: Partial<MealRecord>) => {
+    if (!uid) return;
+    const current = records.find(r => r.id === id);
+    if (!current) return;
+
+    await upsertRecord(uid, { ...current, ...updatedFields });
     setEditingRecord(null);
   };
 
-  const deleteRecord = (id: string) => {
-    setRecords(prev => prev.filter(r => r.id !== id));
+  const deleteRecord = async (id: string) => {
+    if (!uid) return;
+
+    await removeRecord(uid, id);
     setEditingRecord(null);
   };
+
 
   const handleOpenAddModal = (cat?: Category) => {
     setPreselectedCategory(cat);
