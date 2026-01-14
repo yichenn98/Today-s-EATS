@@ -8,7 +8,7 @@ export interface MealRecord {
   shopName: string;
   mealName: string;
   price: number;
-  imageUrl?: string; // base64
+  image?: string; // base64
 }
 
 export interface User {
