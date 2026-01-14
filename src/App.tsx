@@ -15,6 +15,11 @@ import { subscribeRecords, upsertRecord, removeRecord } from './cloud';
 
 const FALLBACK_AVATAR = 'https://ui-avatars.com/api/?name=User&background=E5DCD3&color=5D6D7E';
 
+// ✅ Firestore 不接受 undefined：通通清掉（但保留 image/base64）
+function cleanUndefined<T extends Record<string, any>>(obj: T): T {
+  return Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as T;
+}
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
   const [records, setRecords] = useState<MealRecord[]>([]);
@@ -64,13 +69,7 @@ const App: React.FC = () => {
     await signOut(auth);
   };
 
-  // ✅ Firestore 限制：不要把 base64 image 存進 Firestore
-  const stripBigFields = (r: MealRecord) => {
-    // 先移除 image（之後要支援圖片：改成存 Storage 的 imageUrl）
-    const { image, ...rest } = r as any;
-    return rest as MealRecord;
-  };
-
+  // ✅ 新增：保留 image（壓縮後的 base64），但清掉 undefined
   const addRecord = async (newRecord: Omit<MealRecord, 'id'>) => {
     if (!uid) {
       alert('登入狀態尚未完成，請稍等 1 秒或重新整理後再試一次。');
@@ -83,7 +82,9 @@ const App: React.FC = () => {
     };
 
     try {
-      await upsertRecord(uid, stripBigFields(recordWithId));
+      const cleaned = cleanUndefined(recordWithId);
+      await upsertRecord(uid, cleaned);
+
       setIsAddModalOpen(false);
       setPreselectedCategory(undefined);
     } catch (e: any) {
@@ -92,6 +93,7 @@ const App: React.FC = () => {
     }
   };
 
+  // ✅ 更新：保留 image（壓縮後的 base64），但清掉 undefined
   const updateRecord = async (id: string, updatedFields: Partial<MealRecord>) => {
     if (!uid) {
       alert('登入狀態尚未完成，請稍等 1 秒或重新整理後再試一次。');
@@ -104,7 +106,8 @@ const App: React.FC = () => {
     const merged: MealRecord = { ...current, ...updatedFields };
 
     try {
-      await upsertRecord(uid, stripBigFields(merged));
+      const cleaned = cleanUndefined(merged);
+      await upsertRecord(uid, cleaned);
       setEditingRecord(null);
     } catch (e: any) {
       console.error('updateRecord failed:', e);
@@ -121,11 +124,10 @@ const App: React.FC = () => {
     try {
       await removeRecord(uid, id);
       setEditingRecord(null);
-   } catch (e: any) {
-  console.error("deleteRecord failed:", e);
-  alert(`刪除失敗：${e?.code ?? ""} ${e?.message ?? e}`);
-}
-
+    } catch (e: any) {
+      console.error('deleteRecord failed:', e);
+      alert(`刪除失敗：${e?.code ?? ''} ${e?.message ?? e}`);
+    }
   };
 
   const handleOpenAddModal = (cat?: Category) => {
