@@ -84,7 +84,7 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({ onClose, onSubmit, defa
           </div>
 
           <div className="space-y-3">
-            <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] ml-1">圖片 Visual</label>
+            <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] ml-1">照片 Photo</label>
             <div 
               className="relative w-full aspect-square rounded-[32px] bg-white border border-[#E5DCD3] flex flex-col items-center justify-center overflow-hidden hover:border-[#5D6D7E]/30 transition-all cursor-pointer group shadow-inner"
               onClick={() => document.getElementById('imageInput')?.click()}
