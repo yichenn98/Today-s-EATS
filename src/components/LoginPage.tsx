@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { GoogleAuthProvider, signInWithPopup, signInWithRedirect } from 'firebase/auth';
+import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
 import { auth } from '../firebase';
 import { User } from '../types';
 import { MORANDI_PRIMARY } from '../constants';
