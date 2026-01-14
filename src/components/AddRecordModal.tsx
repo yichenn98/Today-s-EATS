@@ -98,14 +98,14 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
             <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] ml-1">
               類別 Sector
             </label>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex flex-wrap gap-2 px-1 overflow-visible">
               {CATEGORIES.map(cat => (
                 <button
                   key={cat}
                   type="button"
                   onClick={() => setCategory(cat)}
                   style={category === cat ? { backgroundColor: MORANDI_PRIMARY } : {}}
-                  className={`px-4 py-2.5 rounded-2xl text-[11px] font-bold transition-all ${
+                  className={`px-4 py-2.5 rounded-2xl text-[11px] font-bold transition-all origin-center ${
                     category === cat
                       ? 'text-white shadow-lg scale-105'
                       : 'bg-white text-gray-400 border border-[#E5DCD3]/50 hover:bg-[#E5DCD3]/20'
