@@ -56,25 +56,30 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, onClose, onUp
             <h2 className="text-2xl font-black text-[#5D6D7E]">檢視紀錄</h2>
             <p className="text-[10px] text-gray-400 uppercase tracking-widest">{record.category} 詳情</p>
           </div>
-          <div className="flex gap-2">
-            <button 
-              onClick={() => { if(confirm('確定要刪除這筆紀錄嗎？')) onDelete(record.id); }} 
-              className="p-3 bg-white hover:bg-red-50 rounded-full transition-colors border border-red-100 group"
-            >
-              <Trash2 size={20} className="text-red-300 group-hover:text-red-500" />
-            </button>
-            <button 
-  onClick={async () => {
-    if (!confirm('確定要刪除這筆紀錄嗎？')) return;
-    await Promise.resolve(onDelete(record.id));
-    onClose(); // ✅ 刪除後自動關掉檢視頁
-  }} 
-  className="p-3 bg-white hover:bg-red-50 rounded-full transition-colors border border-red-100 group"
->
-  <Trash2 size={20} className="text-red-300 group-hover:text-red-500" />
-</button>
+         <div className="flex gap-2">
+  {/* 🗑 刪除紀錄 */}
+  <button
+    type="button"
+    onClick={async () => {
+      if (!confirm('確定要刪除這筆紀錄嗎？')) return;
+      await Promise.resolve(onDelete(record.id));
+      onClose(); // ✅ 刪除後自動關閉檢視頁
+    }}
+    className="p-3 bg-white hover:bg-red-50 rounded-full transition-colors border border-red-100 group"
+  >
+    <Trash2 size={20} className="text-red-300 group-hover:text-red-500" />
+  </button>
 
-          </div>
+  {/* ❌ 關閉檢視頁（不刪除） */}
+  <button
+    type="button"
+    onClick={onClose}
+    className="p-3 bg-white hover:bg-gray-50 rounded-full transition-colors border border-[#E5DCD3]/50"
+  >
+    <X size={20} className="text-gray-400" />
+  </button>
+</div>
+
         </div>
 
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-8 pb-6 hide-scrollbar">
