@@ -12,6 +12,7 @@ interface AddRecordModalProps {
 }
 
 const AddRecordModal: React.FC<AddRecordModalProps> = ({
+  isOpen,
   onClose,
   onSubmit,
   defaultDate,
@@ -20,12 +21,15 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
   const [category, setCategory] = useState<Category>(initialCategory || '早餐');
   const [shopName, setShopName] = useState('');
   const [mealName, setMealName] = useState('');
-  const [price, setPrice] = useState('');
+  const [price, setPrice] = useState(''); // 保留 string，讓 input number 的提示正常運作
   const [image, setImage] = useState<string | undefined>(undefined);
 
   useEffect(() => {
     if (initialCategory) setCategory(initialCategory);
   }, [initialCategory]);
+
+  // ✅ 沒開就不渲染（避免蓋住頁面/吃點擊）
+  if (!isOpen) return null;
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -36,7 +40,10 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
     reader.readAsDataURL(file);
   };
 
-  const handleSubmit = () => {
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+
+    // ✅ 保留你的原本判斷（required 也會擋）
     if (!mealName || !shopName || !price) return;
 
     onSubmit({
@@ -48,27 +55,30 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
       image
     });
 
-    // 🔑 提交後關閉 modal（體感會正常很多）
+    // ✅ 提交後關閉（體感更順）
     onClose();
   };
 
   return (
+    // ✅ z-index 拉高，避免被底部 nav/FAB 擋到；pointer-events 確保可點
     <div className="fixed inset-0 z-[9999] pointer-events-auto flex items-end justify-center bg-[#5D6D7E]/40 backdrop-blur-sm animate-in fade-in duration-300">
       <div className="bg-[#FDFBF9] w-full max-w-md rounded-t-[48px] p-8 animate-in slide-in-from-bottom duration-500 flex flex-col max-h-[92vh] shadow-2xl pointer-events-auto">
         <div className="flex justify-between items-center mb-8">
-          <div>
+          <div className="flex flex-col">
             <h2 className="text-2xl font-black text-[#5D6D7E]">紀錄美味</h2>
             <p className="text-[10px] text-gray-400 uppercase tracking-widest">New Meal Entry</p>
           </div>
           <button
+            type="button"
             onClick={onClose}
-            className="p-3 bg-white hover:bg-gray-50 rounded-full border border-[#E5DCD3]/50"
+            className="p-3 bg-white hover:bg-gray-50 rounded-full transition-colors border border-[#E5DCD3]/50"
           >
             <X size={20} className="text-gray-400" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto space-y-8 pb-6 hide-scrollbar">
+        {/* ✅ 還原 form + required + number 內建提示 */}
+        <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-8 pb-6 hide-scrollbar">
           {/* 類別 */}
           <div className="space-y-3">
             <label className="text-[10px] font-black text-gray-300 uppercase tracking-[0.2em] ml-1">
@@ -84,7 +94,7 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
                   className={`px-4 py-2.5 rounded-2xl text-[11px] font-bold transition-all ${
                     category === cat
                       ? 'text-white shadow-lg scale-105'
-                      : 'bg-white text-gray-400 border border-[#E5DCD3]/50'
+                      : 'bg-white text-gray-400 border border-[#E5DCD3]/50 hover:bg-[#E5DCD3]/20'
                   }`}
                 >
                   {cat}
@@ -99,13 +109,25 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
               照片 Photo
             </label>
             <div
-              className="relative w-full aspect-square rounded-[32px] bg-white border border-[#E5DCD3] flex items-center justify-center overflow-hidden cursor-pointer"
+              className="relative w-full aspect-square rounded-[32px] bg-white border border-[#E5DCD3] flex flex-col items-center justify-center overflow-hidden hover:border-[#5D6D7E]/30 transition-all cursor-pointer group shadow-inner"
               onClick={() => document.getElementById('imageInput')?.click()}
             >
               {image ? (
-                <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                <>
+                  <img src={image} alt="Preview" className="w-full h-full object-cover" />
+                  <div className="absolute inset-0 bg-[#5D6D7E]/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                    <Camera className="text-white" size={32} />
+                  </div>
+                </>
               ) : (
-                <ImageIcon className="text-[#E5DCD3]" size={32} />
+                <>
+                  <div className="w-12 h-12 bg-[#FDFBF9] rounded-2xl shadow-sm flex items-center justify-center mb-2 border border-[#E5DCD3]/30">
+                    <ImageIcon className="text-[#E5DCD3]" size={24} />
+                  </div>
+                  <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">
+                    Upload Meal Photo
+                  </span>
+                </>
               )}
               <input
                 id="imageInput"
@@ -117,38 +139,61 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
             </div>
           </div>
 
-          {/* 表單 */}
+          {/* 欄位 */}
           <div className="space-y-4">
-            <input
-              value={shopName}
-              onChange={e => setShopName(e.target.value)}
-              placeholder="店名"
-              className="w-full px-4 py-4 rounded-[20px] border border-[#E5DCD3]/50"
-            />
-            <input
-              value={mealName}
-              onChange={e => setMealName(e.target.value)}
-              placeholder="餐點"
-              className="w-full px-4 py-4 rounded-[20px] border border-[#E5DCD3]/50"
-            />
-            <input
-              type="number"
-              value={price}
-              onChange={e => setPrice(e.target.value)}
-              placeholder="金額"
-              className="w-full px-4 py-4 rounded-[20px] border border-[#E5DCD3]/50"
-            />
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                <MapPin size={16} className="text-[#E5DCD3]" />
+              </div>
+              <input
+                type="text"
+                value={shopName}
+                onChange={(e) => setShopName(e.target.value)}
+                placeholder="在哪裡吃的？ (店名)"
+                required
+                className="block w-full pl-12 pr-6 py-4 bg-white border border-[#E5DCD3]/50 rounded-[20px] text-sm text-[#5D6D7E] placeholder:text-gray-300 focus:ring-2 focus:ring-[#5D6D7E]/10 focus:border-[#5D6D7E]/30 outline-none transition-all"
+              />
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                <Tag size={16} className="text-[#E5DCD3]" />
+              </div>
+              <input
+                type="text"
+                value={mealName}
+                onChange={(e) => setMealName(e.target.value)}
+                placeholder="吃了什麼好料？ (餐點)"
+                required
+                className="block w-full pl-12 pr-6 py-4 bg-white border border-[#E5DCD3]/50 rounded-[20px] text-sm text-[#5D6D7E] placeholder:text-gray-300 focus:ring-2 focus:ring-[#5D6D7E]/10 focus:border-[#5D6D7E]/30 outline-none transition-all"
+              />
+            </div>
+
+            <div className="relative">
+              <div className="absolute inset-y-0 left-0 pl-5 flex items-center pointer-events-none">
+                <DollarSign size={16} className="text-[#E5DCD3]" />
+              </div>
+              <input
+                type="number"
+                inputMode="numeric"
+                value={price}
+                onChange={(e) => setPrice(e.target.value)}
+                placeholder="這餐花了多少錢？"
+                required
+                className="block w-full pl-12 pr-6 py-4 bg-white border border-[#E5DCD3]/50 rounded-[20px] text-sm text-[#5D6D7E] placeholder:text-gray-300 focus:ring-2 focus:ring-[#5D6D7E]/10 focus:border-[#5D6D7E]/30 outline-none transition-all"
+              />
+            </div>
           </div>
 
+          {/* ✅ 保存鍵：保留 submit，並加 relative/z-10 避免被任何層蓋住 */}
           <button
-            type="button"
-            onClick={handleSubmit}
+            type="submit"
             style={{ backgroundColor: MORANDI_PRIMARY }}
-            className="w-full py-5 text-white rounded-[24px] font-black text-lg shadow-xl hover:opacity-90 active:scale-[0.98]"
+            className="relative z-10 w-full py-5 text-white rounded-[24px] font-black text-lg hover:opacity-90 active:scale-[0.98] transition-all mt-6 shadow-xl pointer-events-auto"
           >
             保存紀錄
           </button>
-        </div>
+        </form>
       </div>
     </div>
   );
