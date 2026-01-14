@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Camera, MapPin, Tag, DollarSign, Image as ImageIcon } from 'lucide-react';
 import { Category, MealRecord } from '../types';
 import { CATEGORIES, MORANDI_PRIMARY } from '../constants';
+import { compressImageToDataUrl } from "../imageCompress";
 
 interface AddRecordModalProps {
   isOpen: boolean;
@@ -33,10 +34,24 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
 
   const [imageFile, setImageFile] = useState<File | null>(null);
 
-const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
   const file = e.target.files?.[0];
-  if (file) setImageFile(file);
+  if (!file) return;
+
+  try {
+    const dataUrl = await compressImageToDataUrl(file, {
+      maxWidth: 900,
+      maxHeight: 900,
+      quality: 0.75,
+      targetBytes: 700_000,
+    });
+    setImage(dataUrl);
+  } catch (err: any) {
+    console.error("Image compress failed:", err);
+    alert("照片太大或壓縮失敗，請換一張或截圖後再上傳。");
+  }
 };
+
 
 
     const reader = new FileReader();
