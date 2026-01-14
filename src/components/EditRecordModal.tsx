@@ -3,6 +3,8 @@ import React, { useState } from 'react';
 import { X, Camera, MapPin, Tag, DollarSign, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { MealRecord } from '../types';
 import { CATEGORY_COLORS, MORANDI_PRIMARY } from '../constants';
+import { compressImageToDataUrl } from "../imageCompress";
+
 
 interface EditRecordModalProps {
   record: MealRecord;
@@ -17,16 +19,24 @@ const EditRecordModal: React.FC<EditRecordModalProps> = ({ record, onClose, onUp
   const [price, setPrice] = useState(record.price.toString());
   const [image, setImage] = useState<string | undefined>(record.image);
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      const reader = new FileReader();
-      reader.onloadend = () => {
-        setImage(reader.result as string);
-      };
-      reader.readAsDataURL(file);
-    }
-  };
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const file = e.target.files?.[0];
+  if (!file) return;
+
+  try {
+    const dataUrl = await compressImageToDataUrl(file, {
+      maxWidth: 900,
+      maxHeight: 900,
+      quality: 0.75,
+      targetBytes: 700_000,
+    });
+    setImage(dataUrl);
+  } catch (err) {
+    console.error("Image compress failed:", err);
+    alert("照片太大或壓縮失敗，請換一張或截圖後再上傳。");
+  }
+};
+
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
