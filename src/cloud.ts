@@ -17,8 +17,15 @@ export function subscribeRecords(uid: string, cb: (records: MealRecord[]) => voi
 
 export async function upsertRecord(uid: string, record: MealRecord) {
   const ref = doc(db, "users", uid, "records", record.id);
-  await setDoc(ref, record, { merge: true });
+
+  // 🔑 Firestore 不接受 undefined，先清掉
+  const cleaned = Object.fromEntries(
+    Object.entries(record).filter(([, v]) => v !== undefined)
+  );
+
+  await setDoc(ref, cleaned, { merge: true });
 }
+
 
 export async function removeRecord(uid: string, id: string) {
   const ref = doc(db, "users", uid, "records", id);
