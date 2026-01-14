@@ -38,15 +38,14 @@ const App: React.FC = () => {
   const [preselectedCategory, setPreselectedCategory] = useState<Category | undefined>(undefined);
 
   useEffect(() => {
-    try {
-      localStorage.setItem('eats_records', JSON.stringify(records));
-    } catch (e) {
-      console.error("Storage quota exceeded:", e);
-      if (e instanceof DOMException && e.name === 'QuotaExceededError') {
-        alert("儲存空間已滿！請嘗試刪除舊紀錄。");
-      }
-    }
-  }, [records]);
+  try {
+    localStorage.setItem('eats_records', JSON.stringify(records));
+  } catch (e) {
+    console.warn("localStorage write failed:", e);
+    // 不顯示任何提示，靜默失敗
+  }
+}, [records]);
+
 
   const handleLogin = (u: User) => {
     setUser(u);
