@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Camera, MapPin, Tag, DollarSign, Image as ImageIcon } from 'lucide-react';
 import { Category, MealRecord } from '../types';
 import { CATEGORIES, MORANDI_PRIMARY } from '../constants';
-import { compressImageToDataUrl } from "../imageCompress";
+import { compressImageToDataUrl } from '../imageCompress';
 
 interface AddRecordModalProps {
   isOpen: boolean;
@@ -22,8 +22,9 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
   const [category, setCategory] = useState<Category>(initialCategory || '早餐');
   const [shopName, setShopName] = useState('');
   const [mealName, setMealName] = useState('');
-  const [price, setPrice] = useState(''); // 保留 string，讓 input number 的提示正常運作
+  const [price, setPrice] = useState(''); // 保留 string，讓 input number 提示正常
   const [image, setImage] = useState<string | undefined>(undefined);
+  const [isCompressing, setIsCompressing] = useState(false);
 
   useEffect(() => {
     if (initialCategory) setCategory(initialCategory);
@@ -32,31 +33,27 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
   // ✅ 沒開就不渲染（避免蓋住頁面/吃點擊）
   if (!isOpen) return null;
 
-  const [imageFile, setImageFile] = useState<File | null>(null);
+  const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
 
-const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-
-  try {
-    const dataUrl = await compressImageToDataUrl(file, {
-      maxWidth: 900,
-      maxHeight: 900,
-      quality: 0.75,
-      targetBytes: 700_000,
-    });
-    setImage(dataUrl);
-  } catch (err: any) {
-    console.error("Image compress failed:", err);
-    alert("照片太大或壓縮失敗，請換一張或截圖後再上傳。");
-  }
-};
-
-
-
-    const reader = new FileReader();
-    reader.onloadend = () => setImage(reader.result as string);
-    reader.readAsDataURL(file);
+    setIsCompressing(true);
+    try {
+      const dataUrl = await compressImageToDataUrl(file, {
+        maxWidth: 900,
+        maxHeight: 900,
+        quality: 0.75,
+        targetBytes: 700_000,
+      });
+      setImage(dataUrl);
+    } catch (err: any) {
+      console.error('Image compress failed:', err);
+      alert('照片太大或壓縮失敗，請換一張或截圖後再上傳。');
+    } finally {
+      setIsCompressing(false);
+      // 讓同一張圖也能重新選到（有些瀏覽器需要）
+      e.currentTarget.value = '';
+    }
   };
 
   const handleSubmit = (e: React.FormEvent) => {
@@ -71,7 +68,7 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
       shopName,
       mealName,
       price: Number(price),
-      image
+      image, // ✅ 壓縮後的 base64（小於安全上限）
     });
 
     // ✅ 提交後關閉（體感更順）
@@ -79,7 +76,6 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
   };
 
   return (
-    // ✅ z-index 拉高，避免被底部 nav/FAB 擋到；pointer-events 確保可點
     <div className="fixed inset-0 z-[9999] pointer-events-auto flex items-end justify-center bg-[#5D6D7E]/40 backdrop-blur-sm animate-in fade-in duration-300">
       <div className="bg-[#FDFBF9] w-full max-w-md rounded-t-[48px] p-8 animate-in slide-in-from-bottom duration-500 flex flex-col max-h-[92vh] shadow-2xl pointer-events-auto">
         <div className="flex justify-between items-center mb-8">
@@ -96,7 +92,6 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
           </button>
         </div>
 
-        {/* ✅ 還原 form + required + number 內建提示 */}
         <form onSubmit={handleSubmit} className="flex-1 overflow-y-auto space-y-8 pb-6 hide-scrollbar">
           {/* 類別 */}
           <div className="space-y-3">
@@ -129,7 +124,7 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
             </label>
             <div
               className="relative w-full aspect-square rounded-[32px] bg-white border border-[#E5DCD3] flex flex-col items-center justify-center overflow-hidden hover:border-[#5D6D7E]/30 transition-all cursor-pointer group shadow-inner"
-              onClick={() => document.getElementById('imageInput')?.click()}
+              onClick={() => !isCompressing && document.getElementById('imageInput')?.click()}
             >
               {image ? (
                 <>
@@ -144,7 +139,7 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
                     <ImageIcon className="text-[#E5DCD3]" size={24} />
                   </div>
                   <span className="text-[10px] font-bold text-gray-300 uppercase tracking-widest">
-                    Upload Meal Photo
+                    {isCompressing ? 'Compressing...' : 'Upload Meal Photo'}
                   </span>
                 </>
               )}
@@ -156,6 +151,10 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
                 onChange={handleFileChange}
               />
             </div>
+
+            {isCompressing && (
+              <p className="text-[11px] text-gray-400">正在壓縮照片，請稍等一下…</p>
+            )}
           </div>
 
           {/* 欄位 */}
@@ -204,7 +203,6 @@ const handleFileChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
             </div>
           </div>
 
-          {/* ✅ 保存鍵：保留 submit，並加 relative/z-10 避免被任何層蓋住 */}
           <button
             type="submit"
             style={{ backgroundColor: MORANDI_PRIMARY }}
