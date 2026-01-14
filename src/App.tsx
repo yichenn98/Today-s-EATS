@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Plus, LayoutGrid, BarChart3, Target, LogOut } from 'lucide-react';
 import { User, MealRecord, ViewType, Category } from './types';
@@ -9,10 +8,12 @@ import LoginPage from './components/LoginPage';
 import AddRecordModal from './components/AddRecordModal';
 import EditRecordModal from './components/EditRecordModal';
 import { MORANDI_PRIMARY } from './constants';
-import { onAuthStateChanged, signOut } from "firebase/auth";
-import { auth } from "./firebase";
-import { subscribeRecords, upsertRecord, removeRecord } from "./cloud";
 
+import { onAuthStateChanged, signOut } from 'firebase/auth';
+import { auth } from './firebase';
+import { subscribeRecords, upsertRecord, removeRecord } from './cloud';
+
+const FALLBACK_AVATAR = 'https://ui-avatars.com/api/?name=User&background=E5DCD3&color=5D6D7E';
 
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null);
@@ -31,10 +32,10 @@ const App: React.FC = () => {
 
       setUid(fu.uid);
       setUser({
-        name: fu.displayName ?? "User",
-        email: fu.email ?? "",
-        avatar: fu.photoURL ?? "",
-        provider: "google",
+        name: fu.displayName ?? 'User',
+        email: fu.email ?? '',
+        avatar: fu.photoURL ?? FALLBACK_AVATAR,
+        provider: 'google',
       });
     });
 
@@ -48,18 +49,14 @@ const App: React.FC = () => {
     return () => unsub();
   }, [uid]);
 
-
   const [activeTab, setActiveTab] = useState<ViewType>('records');
   const [selectedDate, setSelectedDate] = useState<string>(new Date().toISOString().split('T')[0]);
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [editingRecord, setEditingRecord] = useState<MealRecord | null>(null);
   const [preselectedCategory, setPreselectedCategory] = useState<Category | undefined>(undefined);
 
-
-
-    // LoginPage 會 onLogin，但我們用 Firebase 真正狀態為準，這裡只做「保持相容」
+  // LoginPage 會 onLogin，但我們用 Firebase 真正狀態為準，這裡只做「保持相容」
   const handleLogin = (_u: User) => {
-    // 不需要 localStorage，也不用在這裡 setUser
     // Firebase onAuthStateChanged 會自動更新 user
   };
 
@@ -67,62 +64,68 @@ const App: React.FC = () => {
     await signOut(auth);
   };
 
-  const addRecord = async (newRecord: Omit<MealRecord, "id">) => {
-  if (!uid) {
-    alert("登入狀態尚未完成，請稍等 1 秒或重新整理後再試一次。");
-    return;
-  }
-
-  const recordWithId: MealRecord = {
-    ...newRecord,
-    id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+  // ✅ Firestore 限制：不要把 base64 image 存進 Firestore
+  const stripBigFields = (r: MealRecord) => {
+    // 先移除 image（之後要支援圖片：改成存 Storage 的 imageUrl）
+    const { image, ...rest } = r as any;
+    return rest as MealRecord;
   };
 
-  try {
-    await upsertRecord(uid, recordWithId);
-    setIsAddModalOpen(false);
-    setPreselectedCategory(undefined);
-  } catch (e) {
-    console.error("addRecord failed:", e);
-    alert("新增失敗：可能是 Firestore 權限/規則尚未設定完成，請看 Console 錯誤訊息。");
-  }
-};
+  const addRecord = async (newRecord: Omit<MealRecord, 'id'>) => {
+    if (!uid) {
+      alert('登入狀態尚未完成，請稍等 1 秒或重新整理後再試一次。');
+      return;
+    }
 
-const updateRecord = async (id: string, updatedFields: Partial<MealRecord>) => {
-  if (!uid) {
-    alert("登入狀態尚未完成，請稍等 1 秒或重新整理後再試一次。");
-    return;
-  }
+    const recordWithId: MealRecord = {
+      ...newRecord,
+      id: `${Date.now()}-${Math.random().toString(36).substring(2, 9)}`,
+    };
 
-  const current = records.find((r) => r.id === id);
-  if (!current) return;
+    try {
+      await upsertRecord(uid, stripBigFields(recordWithId));
+      setIsAddModalOpen(false);
+      setPreselectedCategory(undefined);
+    } catch (e: any) {
+      console.error('addRecord failed:', e);
+      alert(`新增失敗：${e?.code ?? ''} ${e?.message ?? e}`);
+    }
+  };
 
-  try {
-    await upsertRecord(uid, { ...current, ...updatedFields });
-    setEditingRecord(null);
-  } catch (e) {
-    console.error("updateRecord failed:", e);
-    alert("更新失敗：可能是 Firestore 權限/規則問題，請看 Console。");
-  }
-};
+  const updateRecord = async (id: string, updatedFields: Partial<MealRecord>) => {
+    if (!uid) {
+      alert('登入狀態尚未完成，請稍等 1 秒或重新整理後再試一次。');
+      return;
+    }
 
-const deleteRecord = async (id: string) => {
-  if (!uid) {
-    alert("登入狀態尚未完成，請稍等 1 秒或重新整理後再試一次。");
-    return;
-  }
+    const current = records.find((r) => r.id === id);
+    if (!current) return;
 
-  try {
-    await removeRecord(uid, id);
-    setEditingRecord(null);
-  } catch (e: any) {
-  console.error("addRecord failed:", e);
-  alert(`新增失敗：${e?.code ?? ""} ${e?.message ?? e}`);
-}
+    const merged: MealRecord = { ...current, ...updatedFields };
 
-};
+    try {
+      await upsertRecord(uid, stripBigFields(merged));
+      setEditingRecord(null);
+    } catch (e: any) {
+      console.error('updateRecord failed:', e);
+      alert(`更新失敗：${e?.code ?? ''} ${e?.message ?? e}`);
+    }
+  };
 
+  const deleteRecord = async (id: string) => {
+    if (!uid) {
+      alert('登入狀態尚未完成，請稍等 1 秒或重新整理後再試一次。');
+      return;
+    }
 
+    try {
+      await removeRecord(uid, id);
+      setEditingRecord(null);
+    } catch (e: any) {
+      console.error('deleteRecord failed:', e);
+      alert(`刪除失敗：${e?.code ?? ''} ${e?.message ?? e}`);
+    }
+  };
 
   const handleOpenAddModal = (cat?: Category) => {
     setPreselectedCategory(cat);
@@ -138,7 +141,11 @@ const deleteRecord = async (id: string) => {
       {/* Header */}
       <header className="p-4 flex justify-between items-center border-b border-gray-100 bg-white/80 backdrop-blur-md sticky top-0 z-10">
         <div className="flex items-center gap-3">
-          <img src={user.avatar} alt={user.name} className="w-8 h-8 rounded-full border border-[#E5DCD3]" />
+          <img
+            src={user.avatar || FALLBACK_AVATAR}
+            alt={user.name}
+            className="w-8 h-8 rounded-full border border-[#E5DCD3]"
+          />
           <h1 className="font-bold text-[#5D6D7E] text-lg tracking-tight">今天吃什麼</h1>
         </div>
         <button onClick={handleLogout} className="p-2 text-gray-400 hover:text-[#D5A6A3] transition-colors">
@@ -149,10 +156,10 @@ const deleteRecord = async (id: string) => {
       {/* Main Content Area */}
       <main className="flex-1 overflow-y-auto pb-24 hide-scrollbar">
         {activeTab === 'records' && (
-          <RecordsPage 
-            records={records} 
-            selectedDate={selectedDate} 
-            setSelectedDate={setSelectedDate} 
+          <RecordsPage
+            records={records}
+            selectedDate={selectedDate}
+            setSelectedDate={setSelectedDate}
             onEditRecord={setEditingRecord}
             onAddAtCategory={handleOpenAddModal}
           />
@@ -163,7 +170,7 @@ const deleteRecord = async (id: string) => {
 
       {/* Floating Action Button */}
       {activeTab === 'records' && (
-        <button 
+        <button
           onClick={() => handleOpenAddModal()}
           style={{ backgroundColor: MORANDI_PRIMARY }}
           className="fixed bottom-24 left-1/2 -translate-x-1/2 w-14 h-14 text-white rounded-full flex items-center justify-center shadow-[0_10px_20px_rgba(93,109,126,0.3)] hover:scale-110 active:scale-90 transition-all z-20 animate-in zoom-in duration-300"
@@ -174,25 +181,31 @@ const deleteRecord = async (id: string) => {
 
       {/* Navigation Bar */}
       <nav className="fixed bottom-0 left-1/2 -translate-x-1/2 w-full max-w-md bg-white/95 backdrop-blur-lg border-t border-[#E5DCD3]/50 py-3 grid grid-cols-3 items-center z-10">
-        <button 
+        <button
           onClick={() => setActiveTab('records')}
-          className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'records' ? 'text-[#5D6D7E] scale-110' : 'text-gray-300 hover:text-gray-400'}`}
+          className={`flex flex-col items-center gap-1 transition-all ${
+            activeTab === 'records' ? 'text-[#5D6D7E] scale-110' : 'text-gray-300 hover:text-gray-400'
+          }`}
         >
           <LayoutGrid size={22} strokeWidth={activeTab === 'records' ? 2.5 : 2} />
           <span className="text-[10px] font-black uppercase tracking-tighter">紀錄</span>
         </button>
 
-        <button 
+        <button
           onClick={() => setActiveTab('stats')}
-          className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'stats' ? 'text-[#5D6D7E] scale-110' : 'text-gray-300 hover:text-gray-400'}`}
+          className={`flex flex-col items-center gap-1 transition-all ${
+            activeTab === 'stats' ? 'text-[#5D6D7E] scale-110' : 'text-gray-300 hover:text-gray-400'
+          }`}
         >
           <BarChart3 size={22} strokeWidth={activeTab === 'stats' ? 2.5 : 2} />
           <span className="text-[10px] font-black uppercase tracking-tighter">統計</span>
         </button>
-        
-        <button 
+
+        <button
           onClick={() => setActiveTab('wheel')}
-          className={`flex flex-col items-center gap-1 transition-all ${activeTab === 'wheel' ? 'text-[#5D6D7E] scale-110' : 'text-gray-300 hover:text-gray-400'}`}
+          className={`flex flex-col items-center gap-1 transition-all ${
+            activeTab === 'wheel' ? 'text-[#5D6D7E] scale-110' : 'text-gray-300 hover:text-gray-400'
+          }`}
         >
           <Target size={22} strokeWidth={activeTab === 'wheel' ? 2.5 : 2} />
           <span className="text-[10px] font-black uppercase tracking-tighter">轉盤</span>
@@ -200,11 +213,11 @@ const deleteRecord = async (id: string) => {
       </nav>
 
       {isAddModalOpen && (
-        <AddRecordModal 
-          isOpen={isAddModalOpen} 
-          onClose={() => setIsAddModalOpen(false)} 
-          onSubmit={addRecord} 
-          defaultDate={selectedDate} 
+        <AddRecordModal
+          isOpen={isAddModalOpen}
+          onClose={() => setIsAddModalOpen(false)}
+          onSubmit={addRecord}
+          defaultDate={selectedDate}
           initialCategory={preselectedCategory}
         />
       )}
