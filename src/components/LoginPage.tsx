@@ -16,51 +16,37 @@ const isInAppBrowser = () => {
 
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
-  const [hint, setHint] = useState<string | null>(null);
 
   const blocked = useMemo(() => isInAppBrowser(), []);
 
   const loginWithGoogle = async () => {
-    if (isLoading) return;
+  if (isLoading) return;
 
-    // ✅ 如果是在 LINE/IG/FB 內開，直接提示不要登入（避免 403）
-    if (blocked) {
-      setHint('Google 登入在 LINE/IG/FB 內建瀏覽器會被擋，請點右上角「⋯/分享」→「在 Safari/Chrome 開啟」後再登入。');
-      return;
-    }
+  // 🚫 在內嵌瀏覽器 / popup 會被擋的環境，直接不做任何事
+  if (blocked) return;
 
-    setIsLoading(true);
-    setHint(null);
+  setIsLoading(true);
 
-    const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({ prompt: 'select_account' });
+  const provider = new GoogleAuthProvider();
+  provider.setCustomParameters({ prompt: 'select_account' });
 
-    try {
-      // ✅ 建議：保持登入（同裝置不容易掉）
-      await setPersistence(auth, browserLocalPersistence);
+  try {
+    await setPersistence(auth, browserLocalPersistence);
+    const result = await signInWithPopup(auth, provider);
+    const fu = result.user;
 
-      const result = await signInWithPopup(auth, provider);
-      const fu = result.user;
-
-      onLogin({
-        name: fu.displayName ?? 'Google User',
-        email: fu.email ?? '',
-        avatar: fu.photoURL ?? '',
-        provider: 'google',
-      });
-    } catch (e: any) {
-      console.warn('Google popup login failed:', e);
-
-      // popup 被擋（最常見）
-      if (e?.code === 'auth/popup-blocked' || e?.code === 'auth/cancelled-popup-request') {
-        alert('登入視窗被瀏覽器擋下了：請允許彈出式視窗（Popup）後再試一次。');
-      } else {
-        alert(`登入失敗：${e?.code ?? ''} ${e?.message ?? e}`);
-      }
-    } finally {
-      setIsLoading(false);
-    }
-  };
+    onLogin({
+      name: fu.displayName ?? 'Google User',
+      email: fu.email ?? '',
+      avatar: fu.photoURL ?? '',
+      provider: 'google',
+    });
+  } catch {
+    // ❌ 什麼都不要做（不 alert、不 console、不提示）
+  } finally {
+    setIsLoading(false);
+  }
+};
 
   return (
     <div className="max-w-md mx-auto h-screen bg-[#FDFBF9] flex flex-col items-center justify-center p-10">
