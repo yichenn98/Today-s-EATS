@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { GoogleAuthProvider, signInWithPopup } from 'firebase/auth';
+import React, { useMemo, useState } from 'react';
+import { GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from 'firebase/auth';
 import { auth } from '../firebase';
 import { User } from '../types';
 import { MORANDI_PRIMARY } from '../constants';
@@ -8,19 +8,37 @@ interface LoginPageProps {
   onLogin: (user: User) => void;
 }
 
+// ✅ LINE/IG/FB 內建瀏覽器偵測（會被 Google 擋）
+const isInAppBrowser = () => {
+  const ua = navigator.userAgent || '';
+  return /Line|FBAN|FBAV|Instagram|Messenger/i.test(ua);
+};
+
 const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const [isLoading, setIsLoading] = useState(false);
+  const [hint, setHint] = useState<string | null>(null);
+
+  const blocked = useMemo(() => isInAppBrowser(), []);
 
   const loginWithGoogle = async () => {
     if (isLoading) return;
+
+    // ✅ 如果是在 LINE/IG/FB 內開，直接提示不要登入（避免 403）
+    if (blocked) {
+      setHint('Google 登入在 LINE/IG/FB 內建瀏覽器會被擋，請點右上角「⋯/分享」→「在 Safari/Chrome 開啟」後再登入。');
+      return;
+    }
+
     setIsLoading(true);
+    setHint(null);
 
     const provider = new GoogleAuthProvider();
-    provider.setCustomParameters({
-      prompt: 'select_account',
-    });
+    provider.setCustomParameters({ prompt: 'select_account' });
 
     try {
+      // ✅ 建議：保持登入（同裝置不容易掉）
+      await setPersistence(auth, browserLocalPersistence);
+
       const result = await signInWithPopup(auth, provider);
       const fu = result.user;
 
@@ -31,16 +49,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         provider: 'google',
       });
     } catch (e: any) {
-  console.warn('Google popup login failed:', e);
+      console.warn('Google popup login failed:', e);
 
-  // popup 被擋（最常見）
-  if (e?.code === 'auth/popup-blocked' || e?.code === 'auth/cancelled-popup-request') {
-    alert('登入視窗被瀏覽器擋下了：請允許彈出式視窗（Popup）後再試一次。');
-  } else {
-    alert(`登入失敗：${e?.code ?? ''} ${e?.message ?? e}`);
-  }
-}
- finally {
+      // popup 被擋（最常見）
+      if (e?.code === 'auth/popup-blocked' || e?.code === 'auth/cancelled-popup-request') {
+        alert('登入視窗被瀏覽器擋下了：請允許彈出式視窗（Popup）後再試一次。');
+      } else {
+        alert(`登入失敗：${e?.code ?? ''} ${e?.message ?? e}`);
+      }
+    } finally {
       setIsLoading(false);
     }
   };
@@ -55,6 +72,23 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         <p className="text-gray-400 text-xs uppercase tracking-[0.4em]">Dietary Journal</p>
       </div>
 
+      {/* ✅ 內嵌瀏覽器提示（可關閉） */}
+      {hint && (
+        <div className="w-full mb-5 p-4 rounded-[20px] bg-white border border-[#E5DCD3]/60 text-[#5D6D7E] text-sm leading-relaxed">
+          <div className="flex items-start justify-between gap-3">
+            <p className="flex-1">{hint}</p>
+            <button
+              type="button"
+              onClick={() => setHint(null)}
+              className="shrink-0 px-3 py-1 rounded-full border border-[#E5DCD3]/60 text-xs font-bold hover:bg-[#E5DCD3]/20 transition"
+            >
+              關閉
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ 如果 blocked：按鈕仍顯示，但按下會出提示，不會觸發登入 */}
       <div className="w-full">
         <button
           onClick={loginWithGoogle}
@@ -64,6 +98,13 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         >
           {isLoading ? '登入中…' : '使用 Google 登入'}
         </button>
+
+        {blocked && (
+          <p className="mt-4 text-[11px] text-gray-400 text-center leading-relaxed">
+            你現在可能是在 LINE/IG/FB 內建瀏覽器開啟，Google 會阻擋登入。<br />
+            請改用 Safari / Chrome 開啟此網頁再登入。
+          </p>
+        )}
       </div>
 
       <p className="mt-20 text-[10px] text-gray-300 text-center leading-relaxed tracking-widest uppercase">
@@ -76,4 +117,3 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
 };
 
 export default LoginPage;
-
