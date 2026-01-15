@@ -80,7 +80,7 @@ const AddRecordModal: React.FC<AddRecordModalProps> = ({
       <div className="bg-[#FDFBF9] w-full max-w-md rounded-t-[48px] p-8 animate-in slide-in-from-bottom duration-500 flex flex-col max-h-[92vh] shadow-2xl pointer-events-auto">
         <div className="flex justify-between items-center mb-8">
           <div className="flex flex-col">
-            <h2 className="text-2xl font-black text-[#5D6D7E]">紀錄美味</h2>
+            <h2 className="text-2xl font-black text-[#5D6D7E]">紀錄餐點</h2>
             <p className="text-[10px] text-gray-400 uppercase tracking-widest">New Meal Entry</p>
           </div>
           <button
