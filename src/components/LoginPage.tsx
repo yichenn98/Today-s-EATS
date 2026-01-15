@@ -1,5 +1,10 @@
 import React, { useMemo, useState } from 'react';
-import { GoogleAuthProvider, signInWithPopup, setPersistence, browserLocalPersistence } from 'firebase/auth';
+import {
+  GoogleAuthProvider,
+  signInWithPopup,
+  setPersistence,
+  browserLocalPersistence,
+} from 'firebase/auth';
 import { auth } from '../firebase';
 import { User } from '../types';
 import { MORANDI_PRIMARY } from '../constants';
@@ -20,33 +25,33 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
   const blocked = useMemo(() => isInAppBrowser(), []);
 
   const loginWithGoogle = async () => {
-  if (isLoading) return;
+    if (isLoading) return;
 
-  // 🚫 在內嵌瀏覽器 / popup 會被擋的環境，直接不做任何事
-  if (blocked) return;
+    // 🚫 在內嵌瀏覽器 / popup 會被擋的環境：無感，不做任何事
+    if (blocked) return;
 
-  setIsLoading(true);
+    setIsLoading(true);
 
-  const provider = new GoogleAuthProvider();
-  provider.setCustomParameters({ prompt: 'select_account' });
+    const provider = new GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
 
-  try {
-    await setPersistence(auth, browserLocalPersistence);
-    const result = await signInWithPopup(auth, provider);
-    const fu = result.user;
+    try {
+      await setPersistence(auth, browserLocalPersistence);
+      const result = await signInWithPopup(auth, provider);
+      const fu = result.user;
 
-    onLogin({
-      name: fu.displayName ?? 'Google User',
-      email: fu.email ?? '',
-      avatar: fu.photoURL ?? '',
-      provider: 'google',
-    });
-  } catch {
-    // ❌ 什麼都不要做（不 alert、不 console、不提示）
-  } finally {
-    setIsLoading(false);
-  }
-};
+      onLogin({
+        name: fu.displayName ?? 'Google User',
+        email: fu.email ?? '',
+        avatar: fu.photoURL ?? '',
+        provider: 'google',
+      });
+    } catch {
+      // ❌ 不 alert、不 console、不提示
+    } finally {
+      setIsLoading(false);
+    }
+  };
 
   return (
     <div className="max-w-md mx-auto h-screen bg-[#FDFBF9] flex flex-col items-center justify-center p-10">
@@ -58,39 +63,15 @@ const LoginPage: React.FC<LoginPageProps> = ({ onLogin }) => {
         <p className="text-gray-400 text-xs uppercase tracking-[0.4em]">Dietary Journal</p>
       </div>
 
-      {/* ✅ 內嵌瀏覽器提示（可關閉） */}
-      {hint && (
-        <div className="w-full mb-5 p-4 rounded-[20px] bg-white border border-[#E5DCD3]/60 text-[#5D6D7E] text-sm leading-relaxed">
-          <div className="flex items-start justify-between gap-3">
-            <p className="flex-1">{hint}</p>
-            <button
-              type="button"
-              onClick={() => setHint(null)}
-              className="shrink-0 px-3 py-1 rounded-full border border-[#E5DCD3]/60 text-xs font-bold hover:bg-[#E5DCD3]/20 transition"
-            >
-              關閉
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ 如果 blocked：按鈕仍顯示，但按下會出提示，不會觸發登入 */}
       <div className="w-full">
         <button
           onClick={loginWithGoogle}
-          disabled={isLoading}
+          disabled={isLoading || blocked}
           style={{ backgroundColor: MORANDI_PRIMARY }}
-          className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-[24px] text-white font-bold text-sm shadow-lg hover:opacity-95 active:opacity-90 transition-all disabled:opacity-60 disabled:cursor-not-allowed"
+          className="w-full flex items-center justify-center gap-3 py-4 px-6 rounded-[24px] text-white font-bold text-sm shadow-lg hover:opacity-95 active:opacity-90 transition-all disabled:opacity-40 disabled:cursor-not-allowed"
         >
           {isLoading ? '登入中…' : '使用 Google 登入'}
         </button>
-
-        {blocked && (
-          <p className="mt-4 text-[11px] text-gray-400 text-center leading-relaxed">
-            你現在可能是在 LINE/IG/FB 內建瀏覽器開啟，Google 會阻擋登入。<br />
-            請改用 Safari / Chrome 開啟此網頁再登入。
-          </p>
-        )}
       </div>
 
       <p className="mt-20 text-[10px] text-gray-300 text-center leading-relaxed tracking-widest uppercase">
