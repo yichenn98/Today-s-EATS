@@ -168,7 +168,7 @@ const App: React.FC = () => {
           />
         )}
         {activeTab === 'stats' && <StatsPage records={records} />}
-        {activeTab === 'wheel' && <WheelPage records={records} />}
+        {activeTab === 'wheel' && <WheelPage records={records} uid={uid} />}
       </main>
 
       {/* Floating Action Button */}
