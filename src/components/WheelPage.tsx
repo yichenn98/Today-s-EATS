@@ -4,6 +4,7 @@ import * as d3 from 'd3';
 import { MealRecord } from '../types';
 import { AlertCircle, Sparkles, Plus, Trash2, X } from 'lucide-react';
 import { CATEGORY_COLORS, MORANDI_PRIMARY } from '../constants';
+import { subscribeWheelPrefs, saveWheelPrefs } from "../cloud";
 
 interface WheelPageProps {
   records: MealRecord[];
