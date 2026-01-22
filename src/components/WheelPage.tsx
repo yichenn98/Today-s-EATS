@@ -38,6 +38,9 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
 
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
+  const [isAdding, setIsAdding] = useState(false);
+  const [addHint, setAddHint] = useState<string | null>(null);
+
 
   // 管理面板
   const [isManageOpen, setIsManageOpen] = useState(false);
@@ -163,24 +166,40 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   // ---------------------------
   // Actions
   // ---------------------------
-  const addCustomShop = async () => {
-    const trimmed = normalizeShop(inputValue);
-    if (!trimmed) return;
+ const addCustomShop = async () => {
+  if (isAdding) return;
 
-    // 避免重複
-    if (customShops.some((s) => normalizeShop(s) === trimmed)) {
-      setInputValue('');
-      setIsAddModalOpen(false);
-      return;
-    }
+  const trimmed = normalizeShop(inputValue);
+  if (!trimmed) {
+    setAddHint('請輸入店名');
+    return;
+  }
 
-    const next = [...customShops, trimmed];
-    setCustomShops(next);
+  // ✅ 重要：如果店名本來就存在於「紀錄 or 自訂」，就不重複新增
+  // 但要給使用者回饋，避免以為壞掉
+  const alreadyInAll = allShopsRaw.some(s => normalizeShop(s) === trimmed);
+  if (alreadyInAll) {
+    setAddHint('已在轉盤清單中（可能已出現在你的紀錄）');
     setInputValue('');
     setIsAddModalOpen(false);
+    return;
+  }
 
-    await persistPrefs(next, excludedShops);
-  };
+  setIsAdding(true);
+  setAddHint(null);
+
+  const next = [...customShops, trimmed];
+  setCustomShops(next);        // ✅ UI 先立即更新，體感一定穩
+  setInputValue('');
+  setIsAddModalOpen(false);
+
+  try {
+    await persistPrefs(next, excludedShops); // ✅ 再同步到雲端
+  } finally {
+    setIsAdding(false);
+  }
+};
+
 
   const clearCustomShops = async () => {
     setCustomShops([]);
@@ -433,13 +452,17 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
       {/* 底部操作 */}
       <div className="w-full flex gap-3">
         <button
-          type="button"
-          onClick={() => setIsAddModalOpen(true)}
-          className="flex-1 py-4 bg-white border border-[#E5DCD3]/50 rounded-[24px] text-[#5D6D7E] font-bold text-sm flex items-center justify-center gap-2 shadow-sm hover:bg-gray-50 transition-all"
-        >
-          <Plus size={18} />
-          快速新增店家
-        </button>
+  type="button"
+  onClick={() => {
+    setIsAddModalOpen(false);
+    setInputValue('');
+    setAddHint(null);
+  }}
+  className="text-gray-400 hover:text-[#D5A6A3]"
+>
+  <X size={20} />
+</button>
+
 
         {customShops.length > 0 && (
           <button
@@ -470,27 +493,39 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
 
             <div className="space-y-6">
               <input
-                type="text"
-                autoFocus
-                value={inputValue}
-                onChange={(e) => setInputValue(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') {
-                    e.preventDefault();
-                    addCustomShop();
-                  }
-                }}
-                placeholder="店名是..."
-                className="w-full px-5 py-4 bg-white border border-[#E5DCD3]/50 rounded-2xl text-sm outline-none focus:border-[#5D6D7E]/30"
-              />
+  type="text"
+  autoFocus
+  value={inputValue}
+  onChange={(e) => {
+    setInputValue(e.target.value);
+    if (addHint) setAddHint(null);
+  }}
+  onKeyDown={(e) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addCustomShop();
+    }
+  }}
+  placeholder="店名是..."
+  className="w-full px-5 py-4 bg-white border border-[#E5DCD3]/50 rounded-2xl text-sm outline-none focus:border-[#5D6D7E]/30"
+/>
+
+              {addHint && (
+  <p className="text-[11px] text-gray-400 leading-relaxed -mt-2">
+    {addHint}
+  </p>
+)}
+
               <button
-                type="button"
-                onClick={addCustomShop}
-                style={{ backgroundColor: MORANDI_PRIMARY }}
-                className="w-full py-4 text-white rounded-2xl font-black text-sm shadow-lg hover:opacity-90 transition-all"
-              >
-                加入轉盤清單
-              </button>
+  type="button"
+  onClick={addCustomShop}
+  disabled={isAdding || !normalizeShop(inputValue)}
+  style={{ backgroundColor: MORANDI_PRIMARY }}
+  className="w-full py-4 text-white rounded-2xl font-black text-sm shadow-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+>
+  {isAdding ? '加入中…' : '加入轉盤清單'}
+</button>
+
             </div>
           </div>
         </div>
