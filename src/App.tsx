@@ -167,7 +167,6 @@ const App: React.FC = () => {
             onAddAtCategory={handleOpenAddModal}
           />
         )}
-        {activeTab === 'stats' && <StatsPage records={records} />}
         {activeTab === 'wheel' && <WheelPage records={records} uid={uid} />}
       </main>
 
