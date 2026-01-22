@@ -1,6 +1,9 @@
 import { collection, deleteDoc, doc, onSnapshot, setDoc } from "firebase/firestore";
 import type { MealRecord } from "./types";
 import { db } from "./firebase";
+type WheelMeta = {
+  excludedShopNames?: string[];
+};
 
 export function subscribeRecords(uid: string, cb: (records: MealRecord[]) => void) {
   const colRef = collection(db, "users", uid, "records");
