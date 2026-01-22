@@ -45,8 +45,10 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
       return;
     }
     const unsub = subscribeWheelPrefs(uid, (prefs: WheelPrefs | null) => {
+      if (!prefs) return;
       const cs = (prefs?.customShops ?? []).map(normalizeShop).filter(Boolean);
       const ex = (prefs?.excludedShops ?? []).map(normalizeShop).filter(Boolean);
+    
 
       // 去重
       setCustomShops(Array.from(new Set(cs)));
@@ -454,12 +456,13 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
                 className="w-full px-5 py-4 bg-white border border-[#E5DCD3]/50 rounded-2xl text-sm outline-none focus:border-[#5D6D7E]/30"
               />
               <button
-                onClick={addCustomShop}
-                style={{ backgroundColor: MORANDI_PRIMARY }}
-                className="w-full py-4 text-white rounded-2xl font-black text-sm shadow-lg hover:opacity-90 transition-all"
-              >
-                加入轉盤清單
-              </button>
+  type="button"
+  onClick={addCustomShop}
+  style={{ backgroundColor: MORANDI_PRIMARY }}
+  className="w-full py-4 text-white rounded-2xl font-black text-sm shadow-lg hover:opacity-90 transition-all"
+>
+  加入轉盤清單
+</button>
             </div>
           </div>
         </div>
