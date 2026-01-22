@@ -8,6 +8,7 @@ import { subscribeWheelPrefs, saveWheelPrefs } from "../cloud";
 
 interface WheelPageProps {
   records: MealRecord[];
+  uid: string | null;
 }
 
 const WheelPage: React.FC<WheelPageProps> = ({ records }) => {
