@@ -25,6 +25,7 @@ type WheelPrefs = {
 };
 
 const normalizeShop = (s: string) => (s ?? '').trim();
+const uniq = (arr: string[]) => Array.from(new Set(arr.map(normalizeShop).filter(Boolean)));
 
 const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   const [spinning, setSpinning] = useState(false);
@@ -32,15 +33,14 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
 
   // 自訂店家（手動新增）
   const [customShops, setCustomShops] = useState<string[]>([]);
-
-  // 排除清單（不想轉到的店；包含「紀錄帶進來」的店）
+  // 排除清單（不想轉到的店）
   const [excludedShops, setExcludedShops] = useState<string[]>([]);
 
+  // 快速新增 modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [addHint, setAddHint] = useState<string | null>(null);
-
 
   // 管理面板
   const [isManageOpen, setIsManageOpen] = useState(false);
@@ -56,12 +56,8 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
 
     const unsub = subscribeWheelPrefs(uid, (prefs: WheelPrefs | null) => {
       if (!prefs) return;
-
-      const cs = (prefs.customShops ?? []).map(normalizeShop).filter(Boolean);
-      const ex = (prefs.excludedShops ?? []).map(normalizeShop).filter(Boolean);
-
-      setCustomShops(Array.from(new Set(cs)));
-      setExcludedShops(Array.from(new Set(ex)));
+      setCustomShops(uniq(prefs.customShops ?? []));
+      setExcludedShops(uniq(prefs.excludedShops ?? []));
     });
 
     return () => unsub?.();
@@ -70,27 +66,26 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   const persistPrefs = async (nextCustom: string[], nextExcluded: string[]) => {
     if (!uid) return;
     const payload: WheelPrefs = {
-      customShops: Array.from(new Set(nextCustom.map(normalizeShop).filter(Boolean))),
-      excludedShops: Array.from(new Set(nextExcluded.map(normalizeShop).filter(Boolean))),
+      customShops: uniq(nextCustom),
+      excludedShops: uniq(nextExcluded),
     };
     try {
       await saveWheelPrefs(uid, payload);
     } catch (e) {
       console.error('saveWheelPrefs failed:', e);
-      // 不提示，避免干擾使用
     }
   };
 
   // ---------------------------
-  // all shops（從紀錄 + 自訂合併）
+  // all shops（紀錄 + 自訂合併）
   // ---------------------------
   const allShopsRaw = useMemo(() => {
-    const fromRecords = records.map((r) => normalizeShop(r.shopName)).filter(Boolean);
-    const fromCustom = customShops.map(normalizeShop).filter(Boolean);
-    return Array.from(new Set([...fromRecords, ...fromCustom]));
+    const fromRecords = uniq(records.map((r) => r.shopName));
+    const fromCustom = uniq(customShops);
+    return uniq([...fromRecords, ...fromCustom]);
   }, [records, customShops]);
 
-  const excludedSet = useMemo(() => new Set(excludedShops.map(normalizeShop)), [excludedShops]);
+  const excludedSet = useMemo(() => new Set(uniq(excludedShops)), [excludedShops]);
 
   // 真正轉盤用：排除後的 shops
   const wheelShops = useMemo(() => {
@@ -100,7 +95,6 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
     return filtered;
   }, [allShopsRaw, excludedSet]);
 
-  // result 被排除就清掉
   useEffect(() => {
     if (result && excludedSet.has(normalizeShop(result))) setResult(null);
   }, [excludedSet, result]);
@@ -109,14 +103,16 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   // D3 Draw
   // ---------------------------
   useEffect(() => {
-    if (!svgRef.current || wheelShops.length === 0) return;
+    if (!svgRef.current) return;
+
+    const svgElement = d3.select(svgRef.current);
+    svgElement.selectAll('*').remove();
+
+    if (wheelShops.length === 0) return;
 
     const width = 300;
     const height = 300;
     const radius = Math.min(width, height) / 2;
-
-    const svgElement = d3.select(svgRef.current);
-    svgElement.selectAll('*').remove();
 
     const mainGroup = svgElement
       .attr('width', width)
@@ -166,40 +162,37 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   // ---------------------------
   // Actions
   // ---------------------------
- const addCustomShop = async () => {
-  if (isAdding) return;
+  const addCustomShop = async () => {
+    if (isAdding) return;
 
-  const trimmed = normalizeShop(inputValue);
-  if (!trimmed) {
-    setAddHint('請輸入店名');
-    return;
-  }
+    const trimmed = normalizeShop(inputValue);
+    if (!trimmed) {
+      setAddHint('請輸入店名');
+      return;
+    }
 
-  // ✅ 重要：如果店名本來就存在於「紀錄 or 自訂」，就不重複新增
-  // 但要給使用者回饋，避免以為壞掉
-  const alreadyInAll = allShopsRaw.some(s => normalizeShop(s) === trimmed);
-  if (alreadyInAll) {
-    setAddHint('已在轉盤清單中（可能已出現在你的紀錄）');
+    const alreadyInAll = allShopsRaw.some((s) => normalizeShop(s) === trimmed);
+    if (alreadyInAll) {
+      setAddHint('已在轉盤清單中（可能已出現在你的紀錄）');
+      setInputValue('');
+      setIsAddModalOpen(false);
+      return;
+    }
+
+    setIsAdding(true);
+    setAddHint(null);
+
+    const next = [...customShops, trimmed];
+    setCustomShops(next); // ✅ UI 先更新
     setInputValue('');
     setIsAddModalOpen(false);
-    return;
-  }
 
-  setIsAdding(true);
-  setAddHint(null);
-
-  const next = [...customShops, trimmed];
-  setCustomShops(next);        // ✅ UI 先立即更新，體感一定穩
-  setInputValue('');
-  setIsAddModalOpen(false);
-
-  try {
-    await persistPrefs(next, excludedShops); // ✅ 再同步到雲端
-  } finally {
-    setIsAdding(false);
-  }
-};
-
+    try {
+      await persistPrefs(next, excludedShops);
+    } finally {
+      setIsAdding(false);
+    }
+  };
 
   const clearCustomShops = async () => {
     setCustomShops([]);
@@ -207,7 +200,6 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
     await persistPrefs([], excludedShops);
   };
 
-  // 排除某店（不刪紀錄，只是不進轉盤）
   const excludeShop = async (shop: string) => {
     const s = normalizeShop(shop);
     if (!s) return;
@@ -220,23 +212,19 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
     await persistPrefs(customShops, nextExcluded);
   };
 
-  // 加回轉盤
   const includeShop = async (shop: string) => {
     const s = normalizeShop(shop);
     const nextExcluded = excludedShops.filter((x) => normalizeShop(x) !== s);
     setExcludedShops(nextExcluded);
-
     await persistPrefs(customShops, nextExcluded);
   };
 
-  // 刪除自訂店家（完全刪掉自訂項）
   const removeCustomShop = async (shop: string) => {
     const s = normalizeShop(shop);
     const nextCustom = customShops.filter((x) => normalizeShop(x) !== s);
     setCustomShops(nextCustom);
     setResult(null);
 
-    // 如果同時在 excluded，也一起清掉
     const nextExcluded = excludedShops.filter((x) => normalizeShop(x) !== s);
     setExcludedShops(nextExcluded);
 
@@ -273,7 +261,6 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
       });
   };
 
-  // 管理面板清單（自訂優先 + 中文排序，一次 sort 不亂跳）
   const manageList = useMemo(() => {
     const customSet = new Set(customShops.map(normalizeShop));
     return [...allShopsRaw].sort((a, b) => {
@@ -302,7 +289,6 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
         </button>
       </div>
 
-      {/* 管理面板 */}
       {isManageOpen && (
         <div className="w-full mb-6 bg-white border border-[#E5DCD3]/50 rounded-[28px] p-5 shadow-sm">
           <div className="flex items-center justify-between mb-4">
@@ -393,7 +379,6 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
         </div>
       )}
 
-      {/* 轉盤 */}
       <div className="relative mb-12">
         {wheelShops.length > 0 && (
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-4 z-20">
@@ -423,7 +408,6 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
         </div>
       </div>
 
-      {/* 主按鈕區 */}
       <div className="w-full space-y-4 mb-8">
         <button
           onClick={spin}
@@ -449,20 +433,20 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
         )}
       </div>
 
-      {/* 底部操作 */}
+      {/* ✅ 底部操作：恢復「快速新增店家」 */}
       <div className="w-full flex gap-3">
         <button
-  type="button"
-  onClick={() => {
-    setIsAddModalOpen(false);
-    setInputValue('');
-    setAddHint(null);
-  }}
-  className="text-gray-400 hover:text-[#D5A6A3]"
->
-  <X size={20} />
-</button>
-
+          type="button"
+          onClick={() => {
+            setIsAddModalOpen(true);
+            setAddHint(null);
+            setInputValue('');
+          }}
+          className="flex-1 py-4 bg-white border border-[#E5DCD3]/50 rounded-[24px] text-[#5D6D7E] font-bold text-sm flex items-center justify-center gap-2 shadow-sm hover:bg-gray-50 transition-all"
+        >
+          <Plus size={18} />
+          快速新增店家
+        </button>
 
         {customShops.length > 0 && (
           <button
@@ -476,7 +460,6 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
         )}
       </div>
 
-      {/* 新增店家 modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#5D6D7E]/40 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-[#FDFBF9] w-full max-w-xs rounded-[40px] p-8 shadow-2xl animate-in zoom-in duration-300">
@@ -493,39 +476,36 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
 
             <div className="space-y-6">
               <input
-  type="text"
-  autoFocus
-  value={inputValue}
-  onChange={(e) => {
-    setInputValue(e.target.value);
-    if (addHint) setAddHint(null);
-  }}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      addCustomShop();
-    }
-  }}
-  placeholder="店名是..."
-  className="w-full px-5 py-4 bg-white border border-[#E5DCD3]/50 rounded-2xl text-sm outline-none focus:border-[#5D6D7E]/30"
-/>
+                type="text"
+                autoFocus
+                value={inputValue}
+                onChange={(e) => {
+                  setInputValue(e.target.value);
+                  if (addHint) setAddHint(null);
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') {
+                    e.preventDefault();
+                    addCustomShop();
+                  }
+                }}
+                placeholder="店名是..."
+                className="w-full px-5 py-4 bg-white border border-[#E5DCD3]/50 rounded-2xl text-sm outline-none focus:border-[#5D6D7E]/30"
+              />
 
               {addHint && (
-  <p className="text-[11px] text-gray-400 leading-relaxed -mt-2">
-    {addHint}
-  </p>
-)}
+                <p className="text-[11px] text-gray-400 leading-relaxed -mt-2">{addHint}</p>
+              )}
 
               <button
-  type="button"
-  onClick={addCustomShop}
-  disabled={isAdding || !normalizeShop(inputValue)}
-  style={{ backgroundColor: MORANDI_PRIMARY }}
-  className="w-full py-4 text-white rounded-2xl font-black text-sm shadow-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
->
-  {isAdding ? '加入中…' : '加入轉盤清單'}
-</button>
-
+                type="button"
+                onClick={addCustomShop}
+                disabled={isAdding || !normalizeShop(inputValue)}
+                style={{ backgroundColor: MORANDI_PRIMARY }}
+                className="w-full py-4 text-white rounded-2xl font-black text-sm shadow-lg hover:opacity-90 transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+              >
+                {isAdding ? '加入中…' : '加入轉盤清單'}
+              </button>
             </div>
           </div>
         </div>
