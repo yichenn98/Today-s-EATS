@@ -25,39 +25,42 @@ type WheelPrefs = {
 };
 
 const normalizeShop = (s: string) => (s ?? '').trim();
-const uniq = (arr: string[]) => Array.from(new Set(arr.map(normalizeShop).filter(Boolean)));
 
 const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
-  // 自訂店家（手動新增）
+  // ✅ 自訂店家（手動新增）
   const [customShops, setCustomShops] = useState<string[]>([]);
-  // 排除清單（不想轉到的店）
+  // ✅ 排除清單（不想轉到的店）
   const [excludedShops, setExcludedShops] = useState<string[]>([]);
 
-  // 快速新增 modal
+  // ✅ 新增 Modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [addHint, setAddHint] = useState<string | null>(null);
 
-  // 管理面板
+  // ✅ 管理面板
   const [isManageOpen, setIsManageOpen] = useState(false);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const currentRotation = useRef(0);
 
   // ---------------------------
-  // Firestore：同步 prefs（換裝置也保留）
+  // ✅ Firestore：同步 prefs
   // ---------------------------
   useEffect(() => {
     if (!uid) return;
 
     const unsub = subscribeWheelPrefs(uid, (prefs: WheelPrefs | null) => {
       if (!prefs) return;
-      setCustomShops(uniq(prefs.customShops ?? []));
-      setExcludedShops(uniq(prefs.excludedShops ?? []));
+
+      const cs = (prefs.customShops ?? []).map(normalizeShop).filter(Boolean);
+      const ex = (prefs.excludedShops ?? []).map(normalizeShop).filter(Boolean);
+
+      setCustomShops(Array.from(new Set(cs)));
+      setExcludedShops(Array.from(new Set(ex)));
     });
 
     return () => unsub?.();
@@ -66,8 +69,8 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   const persistPrefs = async (nextCustom: string[], nextExcluded: string[]) => {
     if (!uid) return;
     const payload: WheelPrefs = {
-      customShops: uniq(nextCustom),
-      excludedShops: uniq(nextExcluded),
+      customShops: Array.from(new Set(nextCustom.map(normalizeShop).filter(Boolean))),
+      excludedShops: Array.from(new Set(nextExcluded.map(normalizeShop).filter(Boolean))),
     };
     try {
       await saveWheelPrefs(uid, payload);
@@ -77,52 +80,54 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   };
 
   // ---------------------------
-  // all shops（紀錄 + 自訂合併）
+  // ✅ all shops：紀錄 + 自訂
   // ---------------------------
   const allShopsRaw = useMemo(() => {
-    const fromRecords = uniq(records.map((r) => r.shopName));
-    const fromCustom = uniq(customShops);
-    return uniq([...fromRecords, ...fromCustom]);
+    const fromRecords = records.map((r) => normalizeShop(r.shopName)).filter(Boolean);
+    const fromCustom = customShops.map(normalizeShop).filter(Boolean);
+    return Array.from(new Set([...fromRecords, ...fromCustom]));
   }, [records, customShops]);
 
-  const excludedSet = useMemo(() => new Set(uniq(excludedShops)), [excludedShops]);
+  const excludedSet = useMemo(() => new Set(excludedShops.map(normalizeShop)), [excludedShops]);
 
-  // 真正轉盤用：排除後的 shops
+  // ✅ 轉盤用 shops：排除後
   const wheelShops = useMemo(() => {
     const filtered = allShopsRaw.filter((s) => !excludedSet.has(normalizeShop(s)));
     if (filtered.length === 0) return [];
-    if (filtered.length === 1) return [...filtered, '隨機探險']; // 至少 2 片
+    if (filtered.length === 1) return [...filtered, '隨機探險'];
     return filtered;
   }, [allShopsRaw, excludedSet]);
 
+  // ✅ result 若被排除，清掉
   useEffect(() => {
     if (result && excludedSet.has(normalizeShop(result))) setResult(null);
   }, [excludedSet, result]);
 
   // ---------------------------
-  // D3 Draw
+  // ✅ D3 Draw
   // ---------------------------
   useEffect(() => {
-    if (!svgRef.current) return;
-
-    const svgElement = d3.select(svgRef.current);
-    svgElement.selectAll('*').remove();
-
-    if (wheelShops.length === 0) return;
+    if (!svgRef.current || wheelShops.length === 0) return;
 
     const width = 300;
     const height = 300;
     const radius = Math.min(width, height) / 2;
+
+    const svgElement = d3.select(svgRef.current);
+    svgElement.selectAll('*').remove();
 
     const mainGroup = svgElement
       .attr('width', width)
       .attr('height', height)
       .append('g')
       .attr('class', 'wheel-group')
-      .attr('transform', `translate(${width / 2}, ${height / 2}) rotate(${currentRotation.current % 360})`);
+      .attr(
+        'transform',
+        `translate(${width / 2}, ${height / 2}) rotate(${currentRotation.current % 360})`
+      );
 
     const data = wheelShops.map((name) => ({ name, value: 1 }));
-    const morandiColors = Object.values(CATEGORY_COLORS);
+    const colors = Object.values(CATEGORY_COLORS);
 
     const pie = d3
       .pie<{ name: string; value: number }>()
@@ -141,7 +146,7 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
     arcs
       .append('path')
       .attr('d', arc)
-      .attr('fill', (_d, i) => morandiColors[i % morandiColors.length])
+      .attr('fill', (_d, i) => colors[i % colors.length])
       .attr('stroke', 'white')
       .attr('stroke-width', '3');
 
@@ -160,8 +165,15 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   }, [wheelShops]);
 
   // ---------------------------
-  // Actions
+  // ✅ Actions
   // ---------------------------
+  const closeAddModal = () => {
+    setIsAddModalOpen(false);
+    setInputValue('');
+    setAddHint(null);
+    setIsAdding(false);
+  };
+
   const addCustomShop = async () => {
     if (isAdding) return;
 
@@ -171,11 +183,10 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
       return;
     }
 
-    const alreadyInAll = allShopsRaw.some((s) => normalizeShop(s) === trimmed);
-    if (alreadyInAll) {
+    // ✅ 已存在（可能在紀錄裡）就提示
+    const already = allShopsRaw.some((s) => normalizeShop(s) === trimmed);
+    if (already) {
       setAddHint('已在轉盤清單中（可能已出現在你的紀錄）');
-      setInputValue('');
-      setIsAddModalOpen(false);
       return;
     }
 
@@ -183,15 +194,10 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
     setAddHint(null);
 
     const next = [...customShops, trimmed];
-    setCustomShops(next); // ✅ UI 先更新
-    setInputValue('');
-    setIsAddModalOpen(false);
+    setCustomShops(next); // ✅ UI 立即更新（保證看得到）
+    closeAddModal();
 
-    try {
-      await persistPrefs(next, excludedShops);
-    } finally {
-      setIsAdding(false);
-    }
+    await persistPrefs(next, excludedShops);
   };
 
   const clearCustomShops = async () => {
@@ -202,8 +208,7 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
 
   const excludeShop = async (shop: string) => {
     const s = normalizeShop(shop);
-    if (!s) return;
-    if (excludedSet.has(s)) return;
+    if (!s || excludedSet.has(s)) return;
 
     const nextExcluded = [...excludedShops, s];
     setExcludedShops(nextExcluded);
@@ -222,11 +227,12 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   const removeCustomShop = async (shop: string) => {
     const s = normalizeShop(shop);
     const nextCustom = customShops.filter((x) => normalizeShop(x) !== s);
-    setCustomShops(nextCustom);
-    setResult(null);
 
     const nextExcluded = excludedShops.filter((x) => normalizeShop(x) !== s);
+
+    setCustomShops(nextCustom);
     setExcludedShops(nextExcluded);
+    setResult(null);
 
     await persistPrefs(nextCustom, nextExcluded);
   };
@@ -379,6 +385,7 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
         </div>
       )}
 
+      {/* 轉盤 */}
       <div className="relative mb-12">
         {wheelShops.length > 0 && (
           <div className="absolute top-0 left-1/2 -translate-x-1/2 -translate-y-4 z-20">
@@ -389,7 +396,7 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
           </div>
         )}
 
-        <div className="bg-white p-6 rounded-full shadow-[0_30px_60px_-15px_rgba(93,109,126,0.15)] border border-[#E5DCD3]/50">
+        <div className="bg-white p-6 rounded-full shadow-[0_30px_60px_-15px_rgba(93,109,126,0.15)] border border-[#E5DCD3]/50 relative">
           {wheelShops.length === 0 ? (
             <div className="w-[300px] h-[300px] rounded-full border-4 border-dashed border-[#E5DCD3] flex flex-col items-center justify-center">
               <AlertCircle size={40} className="text-[#E5DCD3] mb-4" />
@@ -408,6 +415,7 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
         </div>
       </div>
 
+      {/* 主按鈕區 */}
       <div className="w-full space-y-4 mb-8">
         <button
           onClick={spin}
@@ -433,14 +441,14 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
         )}
       </div>
 
-      {/* ✅ 底部操作：恢復「快速新增店家」 */}
+      {/* 底部操作：✅ 恢復「快速新增店家」按鈕（不要放 X 取代它） */}
       <div className="w-full flex gap-3">
         <button
           type="button"
           onClick={() => {
             setIsAddModalOpen(true);
-            setAddHint(null);
             setInputValue('');
+            setAddHint(null);
           }}
           className="flex-1 py-4 bg-white border border-[#E5DCD3]/50 rounded-[24px] text-[#5D6D7E] font-bold text-sm flex items-center justify-center gap-2 shadow-sm hover:bg-gray-50 transition-all"
         >
@@ -460,6 +468,7 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
         )}
       </div>
 
+      {/* 新增店家 modal */}
       {isAddModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-[#5D6D7E]/40 backdrop-blur-sm animate-in fade-in duration-300">
           <div className="bg-[#FDFBF9] w-full max-w-xs rounded-[40px] p-8 shadow-2xl animate-in zoom-in duration-300">
@@ -467,14 +476,14 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
               <h3 className="text-xl font-black text-[#5D6D7E]">店名</h3>
               <button
                 type="button"
-                onClick={() => setIsAddModalOpen(false)}
+                onClick={closeAddModal}
                 className="text-gray-400 hover:text-[#D5A6A3]"
               >
                 <X size={20} />
               </button>
             </div>
 
-            <div className="space-y-6">
+            <div className="space-y-4">
               <input
                 type="text"
                 autoFocus
@@ -493,9 +502,7 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
                 className="w-full px-5 py-4 bg-white border border-[#E5DCD3]/50 rounded-2xl text-sm outline-none focus:border-[#5D6D7E]/30"
               />
 
-              {addHint && (
-                <p className="text-[11px] text-gray-400 leading-relaxed -mt-2">{addHint}</p>
-              )}
+              {addHint && <p className="text-[11px] text-gray-400 leading-relaxed">{addHint}</p>}
 
               <button
                 type="button"
