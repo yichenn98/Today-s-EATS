@@ -12,43 +12,50 @@ import {
   MinusCircle,
 } from 'lucide-react';
 import { CATEGORY_COLORS, MORANDI_PRIMARY } from '../constants';
-import { subscribeWheelPrefs, saveWheelPrefs } from '../cloud';
+import { subscribeWheelPrefs, saveWheelPrefs, WheelPrefs } from '../cloud';
 
 interface WheelPageProps {
   records: MealRecord[];
   uid: string | null;
 }
 
-type WheelPrefs = {
-  customShops?: string[];
-  excludedShops?: string[];
-};
-
 const normalizeShop = (s: string) => (s ?? '').trim();
+
+const uniqNorm = (arr: string[]) => {
+  const seen = new Set<string>();
+  const out: string[] = [];
+  for (const x of arr) {
+    const n = normalizeShop(x);
+    if (!n) continue;
+    if (seen.has(n)) continue;
+    seen.add(n);
+    out.push(n);
+  }
+  return out;
+};
 
 const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   const [spinning, setSpinning] = useState(false);
   const [result, setResult] = useState<string | null>(null);
 
-  // ✅ 自訂店家（手動新增）
   const [customShops, setCustomShops] = useState<string[]>([]);
-  // ✅ 排除清單（不想轉到的店）
   const [excludedShops, setExcludedShops] = useState<string[]>([]);
 
-  // ✅ 新增 Modal
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
   const [inputValue, setInputValue] = useState('');
   const [isAdding, setIsAdding] = useState(false);
   const [addHint, setAddHint] = useState<string | null>(null);
 
-  // ✅ 管理面板
   const [isManageOpen, setIsManageOpen] = useState(false);
 
   const svgRef = useRef<SVGSVGElement>(null);
   const currentRotation = useRef(0);
 
+  // ✅ 關鍵：最後一次本機寫入的時間戳（防止舊 snapshot 覆蓋）
+  const lastLocalWriteAtRef = useRef<number>(0);
+
   // ---------------------------
-  // ✅ Firestore：同步 prefs
+  // ✅ Firestore：訂閱 prefs
   // ---------------------------
   useEffect(() => {
     if (!uid) return;
@@ -56,11 +63,18 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
     const unsub = subscribeWheelPrefs(uid, (prefs: WheelPrefs | null) => {
       if (!prefs) return;
 
-      const cs = (prefs.customShops ?? []).map(normalizeShop).filter(Boolean);
-      const ex = (prefs.excludedShops ?? []).map(normalizeShop).filter(Boolean);
+      const remoteUpdatedAt = prefs.updatedAt ?? 0;
 
-      setCustomShops(Array.from(new Set(cs)));
-      setExcludedShops(Array.from(new Set(ex)));
+      // ✅ 如果遠端比較舊（或亂序回來），直接忽略
+      if (remoteUpdatedAt && remoteUpdatedAt < lastLocalWriteAtRef.current) {
+        return;
+      }
+
+      const cs = uniqNorm(prefs.customShops ?? []);
+      const ex = uniqNorm(prefs.excludedShops ?? []);
+
+      setCustomShops(cs);
+      setExcludedShops(ex);
     });
 
     return () => unsub?.();
@@ -68,10 +82,16 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
 
   const persistPrefs = async (nextCustom: string[], nextExcluded: string[]) => {
     if (!uid) return;
+
     const payload: WheelPrefs = {
-      customShops: Array.from(new Set(nextCustom.map(normalizeShop).filter(Boolean))),
-      excludedShops: Array.from(new Set(nextExcluded.map(normalizeShop).filter(Boolean))),
+      customShops: uniqNorm(nextCustom),
+      excludedShops: uniqNorm(nextExcluded),
+      updatedAt: Date.now(),
     };
+
+    // ✅ 記住本機寫入時間：之後 snapshot 若比較舊就不吃
+    lastLocalWriteAtRef.current = payload.updatedAt ?? Date.now();
+
     try {
       await saveWheelPrefs(uid, payload);
     } catch (e) {
@@ -80,7 +100,7 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
   };
 
   // ---------------------------
-  // ✅ all shops：紀錄 + 自訂
+  // ✅ all shops（紀錄 + 自訂）
   // ---------------------------
   const allShopsRaw = useMemo(() => {
     const fromRecords = records.map((r) => normalizeShop(r.shopName)).filter(Boolean);
@@ -90,7 +110,6 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
 
   const excludedSet = useMemo(() => new Set(excludedShops.map(normalizeShop)), [excludedShops]);
 
-  // ✅ 轉盤用 shops：排除後
   const wheelShops = useMemo(() => {
     const filtered = allShopsRaw.filter((s) => !excludedSet.has(normalizeShop(s)));
     if (filtered.length === 0) return [];
@@ -98,7 +117,6 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
     return filtered;
   }, [allShopsRaw, excludedSet]);
 
-  // ✅ result 若被排除，清掉
   useEffect(() => {
     if (result && excludedSet.has(normalizeShop(result))) setResult(null);
   }, [excludedSet, result]);
@@ -183,7 +201,7 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
       return;
     }
 
-    // ✅ 已存在（可能在紀錄裡）就提示
+    // 已存在（可能在紀錄裡）就提示，不新增
     const already = allShopsRaw.some((s) => normalizeShop(s) === trimmed);
     if (already) {
       setAddHint('已在轉盤清單中（可能已出現在你的紀錄）');
@@ -193,10 +211,13 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
     setIsAdding(true);
     setAddHint(null);
 
-    const next = [...customShops, trimmed];
-    setCustomShops(next); // ✅ UI 立即更新（保證看得到）
+    const next = uniqNorm([...customShops, trimmed]);
+
+    // ✅ 先本機立即更新（轉盤立刻看得到）
+    setCustomShops(next);
     closeAddModal();
 
+    // ✅ 再寫入雲端（且有 updatedAt 防亂序覆蓋）
     await persistPrefs(next, excludedShops);
   };
 
@@ -208,9 +229,10 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
 
   const excludeShop = async (shop: string) => {
     const s = normalizeShop(shop);
-    if (!s || excludedSet.has(s)) return;
+    if (!s) return;
+    if (excludedSet.has(s)) return;
 
-    const nextExcluded = [...excludedShops, s];
+    const nextExcluded = uniqNorm([...excludedShops, s]);
     setExcludedShops(nextExcluded);
     setResult(null);
 
@@ -221,13 +243,14 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
     const s = normalizeShop(shop);
     const nextExcluded = excludedShops.filter((x) => normalizeShop(x) !== s);
     setExcludedShops(nextExcluded);
+
     await persistPrefs(customShops, nextExcluded);
   };
 
   const removeCustomShop = async (shop: string) => {
     const s = normalizeShop(shop);
-    const nextCustom = customShops.filter((x) => normalizeShop(x) !== s);
 
+    const nextCustom = customShops.filter((x) => normalizeShop(x) !== s);
     const nextExcluded = excludedShops.filter((x) => normalizeShop(x) !== s);
 
     setCustomShops(nextCustom);
@@ -415,7 +438,7 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
         </div>
       </div>
 
-      {/* 主按鈕區 */}
+      {/* 主按鈕 */}
       <div className="w-full space-y-4 mb-8">
         <button
           onClick={spin}
@@ -441,7 +464,7 @@ const WheelPage: React.FC<WheelPageProps> = ({ records, uid }) => {
         )}
       </div>
 
-      {/* 底部操作：✅ 恢復「快速新增店家」按鈕（不要放 X 取代它） */}
+      {/* 底部操作 */}
       <div className="w-full flex gap-3">
         <button
           type="button"
